@@ -107,7 +107,7 @@ export class DeepgramSTTProvider implements STTProvider {
         'Authorization': `Token ${this.apiKey}`,
         'Content-Type': audio.mimeType,
       },
-      body: audio.audio,
+      body: audio.audio as unknown as BodyInit,
     });
 
     if (!res.ok) {

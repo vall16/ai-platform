@@ -143,6 +143,7 @@ export class ElevenLabsTTSProvider implements TTSProvider {
 
   async startStream(ctx: ProviderContext, request: Omit<TTSRequest, 'text'>): Promise<TTSStream> {
     const voiceId = request.voiceId || this.defaultVoiceId;
+    const self = this;
     let audioCallback: ((chunk: Uint8Array) => void) | null = null;
     let endCallback: (() => void) | null = null;
     let closed = false;
@@ -153,7 +154,7 @@ export class ElevenLabsTTSProvider implements TTSProvider {
 
         // For streaming, we make a request per text segment.
         // In production, this would use ElevenLabs' streaming endpoint.
-        void this.streamChunk(voiceId, text, request, (chunk) => {
+        void self.streamChunk(voiceId, text, request, (chunk: Uint8Array) => {
           audioCallback?.(chunk);
         });
       },
