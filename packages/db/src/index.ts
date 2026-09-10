@@ -1,4 +1,19 @@
-// @ai-platform/db — schema, migrations, data access
-// Phase 0: skeleton.
+// @ai-platform/db — schema types and migration utilities.
 
-export {};
+export type {
+  Tenant,
+  TenantStatus,
+  Provider,
+  ProviderType,
+  ProviderStatus,
+  ProviderAccount,
+  ProviderAccountStatus,
+  Pricing,
+  PricingUnit,
+  Session,
+  ProductType,
+  SessionStatus,
+  UsageLedgerEntry,
+  RoutingDecision,
+  RoutingCandidate,
+} from './types.js';
