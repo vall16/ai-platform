@@ -1,0 +1,25 @@
+{
+  "name": "@ai-platform/mock-providers",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Mock implementations of all provider interfaces for local development and testing",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-platform/contracts": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

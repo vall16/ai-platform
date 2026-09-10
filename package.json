@@ -1,0 +1,20 @@
+{
+  "name": "ai-platform",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Multi-tenant AI SaaS platform — AI Persona + AI Salesperson",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "integrations/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
