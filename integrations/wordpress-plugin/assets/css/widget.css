@@ -1,0 +1,220 @@
+/* AI Persona Widget — frontend styles */
+
+.ai-persona-widget {
+  --ap-bg: #1a1a2e;
+  --ap-surface: #16213e;
+  --ap-text: #e0e0e0;
+  --ap-accent: #4fc3f7;
+  --ap-accent-hover: #81d4fa;
+  --ap-msg-user: #0f3460;
+  --ap-msg-ai: #1a1a2e;
+  --ap-radius: 12px;
+  --ap-width: 380px;
+  --ap-height: 520px;
+
+  position: relative;
+  width: var(--ap-width);
+  max-width: 100%;
+  height: var(--ap-height);
+  background: var(--ap-bg);
+  border-radius: var(--ap-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--ap-text);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.ai-persona-widget[data-theme="light"] {
+  --ap-bg: #ffffff;
+  --ap-surface: #f5f5f5;
+  --ap-text: #1a1a2e;
+  --ap-accent: #1976d2;
+  --ap-accent-hover: #1565c0;
+  --ap-msg-user: #e3f2fd;
+  --ap-msg-ai: #f5f5f5;
+}
+
+/* Header */
+.ai-persona-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--ap-surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-persona-avatar-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ap-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.ai-persona-header-info {
+  flex: 1;
+}
+
+.ai-persona-header-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-persona-header-status {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.ai-persona-header-status.online::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4caf50;
+  margin-right: 4px;
+}
+
+/* Avatar video area */
+.ai-persona-avatar-area {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ai-persona-avatar-area video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ai-persona-avatar-placeholder {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+/* Messages area */
+.ai-persona-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-persona-msg {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: var(--ap-radius);
+  font-size: 13px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.ai-persona-msg.user {
+  align-self: flex-end;
+  background: var(--ap-msg-user);
+}
+
+.ai-persona-msg.assistant {
+  align-self: flex-start;
+  background: var(--ap-msg-ai);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-persona-msg.typing {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+}
+
+.ai-persona-msg.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ap-accent);
+  animation: ap-typing 1.2s infinite;
+}
+
+.ai-persona-msg.typing span:nth-child(2) { animation-delay: 0.2s; }
+.ai-persona-msg.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes ap-typing {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+/* Input area */
+.ai-persona-input-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--ap-surface);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-persona-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: var(--ap-bg);
+  color: var(--ap-text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ai-persona-input:focus {
+  border-color: var(--ap-accent);
+}
+
+.ai-persona-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ap-accent);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.ai-persona-btn:hover {
+  background: var(--ap-accent-hover);
+}
+
+.ai-persona-btn.mic.active {
+  background: #f44336;
+  animation: ap-pulse 1s infinite;
+}
+
+@keyframes ap-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(244, 67, 54, 0); }
+}
+
+/* Responsive */
+@media (max-width: 420px) {
+  .ai-persona-widget {
+    --ap-width: 100%;
+    --ap-height: 450px;
+  }
+}

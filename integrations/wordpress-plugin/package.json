@@ -1,0 +1,9 @@
+{
+  "name": "@ai-platform/wordpress-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WordPress plugin for AI Persona conversational avatar widget",
+  "scripts": {
+    "lint": "echo 'PHP lint: use phpcs with WordPress coding standards'"
+  }
+}

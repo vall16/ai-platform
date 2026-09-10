@@ -1,0 +1,13 @@
+/* AI Persona — admin panel styles */
+
+.ai-persona-admin-preview {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f6f7f7;
+  border: 1px solid #dcdcde;
+  border-radius: 4px;
+}
+
+.ai-persona-admin-preview h3 {
+  margin-top: 0;
+}
