@@ -5,6 +5,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMChunk,
+  ToolCall,
   ProviderContext,
   ProviderResult,
   HealthStatus,

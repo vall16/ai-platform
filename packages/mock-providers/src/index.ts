@@ -7,3 +7,4 @@ export { MockAvatarProvider } from './avatar-provider.js';
 export { MockVoiceProvider } from './voice-provider.js';
 export { MockCommerceProvider } from './commerce-provider.js';
 export { MockBillingProvider } from './billing-provider.js';
+export { MockContentToolProvider } from './content-provider.js';

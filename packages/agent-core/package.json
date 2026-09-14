@@ -1,8 +1,8 @@
 {
-  "name": "@ai-platform/mock-providers",
-  "version": "0.0.1",
+  "name": "@ai-platform/agent-core",
+  "version": "0.1.0",
   "private": true,
-  "description": "Mock implementations of all provider interfaces for local development and testing",
+  "description": "Agent Core — conversation, in-session memory, tool invocation, and prompting shared by all products",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,9 +18,10 @@
   },
   "dependencies": {
     "@ai-platform/contracts": "*",
-    "@ai-platform/agent-core": "*"
+    "@ai-platform/cost-ledger": "*"
   },
   "devDependencies": {
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
   }
 }
