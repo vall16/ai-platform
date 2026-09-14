@@ -37,13 +37,15 @@ export class MockLLMProvider implements LLMProvider {
   async shutdown(): Promise<void> {}
 
   async complete(ctx: ProviderContext, request: LLMRequest): Promise<ProviderResult<LLMResponse>> {
-    const content = this.generateResponse(request);
+    const { content, toolCalls } = this.generateResponse(request);
+    const hasTools = toolCalls && toolCalls.length > 0;
     const tokensOut = Math.ceil(content.length / 4);
 
     return {
       data: {
         content,
-        finishReason: 'stop',
+        toolCalls: hasTools ? toolCalls : undefined,
+        finishReason: hasTools ? 'tool_calls' : 'stop',
         model: 'mock-llm-v1',
       },
       cost: { costMicroUsd: tokensOut * this.costPerToken },
@@ -54,7 +56,7 @@ export class MockLLMProvider implements LLMProvider {
   }
 
   async *stream(ctx: ProviderContext, request: LLMRequest): AsyncIterable<LLMChunk> {
-    const content = this.generateResponse(request);
+    const { content } = this.generateResponse(request);
     const words = content.split(' ');
 
     for (const word of words) {
@@ -65,15 +67,34 @@ export class MockLLMProvider implements LLMProvider {
     yield { delta: '', finishReason: 'stop' };
   }
 
-  private generateResponse(request: LLMRequest): string {
+  /**
+   * Deterministic tool-calling behavior:
+   * - If tools are offered and no tool result is in the history yet, emit a
+   *   single tool call (search_posts) for the user's input.
+   * - Once a tool result is present, produce the final natural-language answer.
+   */
+  private generateResponse(request: LLMRequest): { content: string; toolCalls?: ToolCall[] } {
     const lastUserMsg = [...request.messages].reverse().find((m) => m.role === 'user');
     const input = lastUserMsg?.content ?? '';
+    const hasToolResult = request.messages.some((m) => m.role === 'tool');
 
-    if (request.tools && request.tools.length > 0) {
-      return JSON.stringify({ tool_call: request.tools[0].name, args: { query: input } });
+    if (request.tools && request.tools.length > 0 && !hasToolResult) {
+      const tool = request.tools[0];
+      return {
+        content: '',
+        toolCalls: [
+          {
+            id: `call_${Math.random().toString(36).slice(2, 10)}`,
+            name: tool.name,
+            arguments: { query: input },
+          },
+        ],
+      };
     }
 
-    return `[mock-llm] You said: "${input.slice(0, 100)}". This is a deterministic mock response for development.`;
+    return {
+      content: `[mock-llm] You said: "${input.slice(0, 100)}". This is a deterministic mock response for development.`,
+    };
   }
 
   private countInputTokens(request: LLMRequest): number {
