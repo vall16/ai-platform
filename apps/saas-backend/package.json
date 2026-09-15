@@ -8,6 +8,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.chatbot.json && node test/chatbot.integration.mjs",
+    "bootstrap": "node scripts/bootstrap.mjs",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts"
   },

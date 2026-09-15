@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 0 — Fondamenta** · Aggiornato: 2026-09-10
+> Stato: **Phase 1 — MVP: AI Persona su WordPress** · Aggiornato: 2026-09-15
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -15,7 +15,7 @@
 
 ## 2. Fasi
 
-### Phase 0 — Fondamenta (in corso)
+### Phase 0 — Fondamenta (completata)
 **Obiettivo:** contratti, schema, struttura. Zero dipendenze da provider reali. Tutto testabile con mock.
 
 - Monorepo (npm workspaces) + struttura `apps/ packages/ integrations/ infra/`
@@ -27,8 +27,12 @@
 
 **Done when:** `tsc` passa; schema applicabile a Postgres; router compila (quando Go disponibile); mock funzionanti; test di isolamento tenant verdi.
 
-### Phase 1 — MVP: AI Persona su WordPress
+**Stato (2026-09-15):** lato TypeScript completato — contratti, schema core, Cost Ledger e mock-providers compilano e i mock funzionano. Il router Go è scritto ma non compilato (Go non disponibile in ambiente).
+
+### Phase 1 — MVP: AI Persona su WordPress (in corso)
 **Obiettivo:** un flusso end-to-end reale, un solo prodotto, 1–2 provider.
+
+**Stato (2026-09-15):** in corso, **de-scoped su chatbot** — pipeline conversazione + TTS senza avatar realtime (l'avatar resta opzionale nel design di AgentCore). Fatto: Agent Core (conversazione, memoria in-sessione, tool `search_posts`/`get_post`, prompting) con mock LLM e test unitari; SaaS backend session manager + endpoint `POST /sessions/:id/messages` e `GET /sessions/:id/audio/:audioId`; Cost Ledger per-session (llm/tts). Da fare: billing Stripe, observability, Control Room v0, router scoring, e2e completo.
 
 - SaaS backend: tenant, auth, billing (Stripe), session manager
 - Agent Core: conversazione, memoria in-sessione, tool invocation (`search_posts`, `get_post`, …), prompting

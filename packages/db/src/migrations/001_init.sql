@@ -89,7 +89,9 @@ CREATE TABLE usage_ledger (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id       UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
   session_id      UUID REFERENCES session(id) ON DELETE SET NULL,
-  provider_id     UUID NOT NULL REFERENCES provider(id) ON DELETE CASCADE,
+  -- TEXT (not a UUID FK): provider ids are not always UUIDs (mock providers use
+  -- readable strings like "mock-llm-1"); also keeps cost history if a provider row is removed.
+  provider_id     TEXT NOT NULL,
   resource_type   TEXT NOT NULL,
   cost_micro_usd  BIGINT NOT NULL CHECK (cost_micro_usd >= 0),
   quantity        BIGINT NOT NULL DEFAULT 1,
