@@ -12,8 +12,11 @@
     "dev": "tsx src/index.ts"
   },
   "dependencies": {
+    "@ai-platform/agent-core": "*",
     "@ai-platform/contracts": "*",
+    "@ai-platform/cost-ledger": "*",
     "@ai-platform/db": "*",
+    "@ai-platform/mock-providers": "*",
     "fastify": "^5.0.0",
     "@fastify/cors": "^10.0.0",
     "pg": "^8.12.0",

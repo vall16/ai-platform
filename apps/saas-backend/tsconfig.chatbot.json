@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-chatbot",
+    "noEmitOnError": false
+  },
+  "include": [
+    "src/services/agent.ts",
+    "src/services/audio-store.ts",
+    "src/providers/factory.ts"
+  ]
+}
