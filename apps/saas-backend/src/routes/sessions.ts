@@ -16,14 +16,16 @@ export function registerSessionRoutes(
 ) {
   // POST /api/v1/sessions — start a new session
   app.post('/api/v1/sessions', { preHandler: [authGuard] }, async (request, reply) => {
-    const { product_type, metadata, language, personality, avatar_id, voice_id } = request.body as {
-      product_type: 'persona' | 'salesperson';
-      metadata?: Record<string, unknown>;
-      language?: string;
-      personality?: string;
-      avatar_id?: string;
-      voice_id?: string;
-    };
+    const { product_type, metadata, language, personality, avatar_id, voice_id, site_url } =
+      request.body as {
+        product_type: 'persona' | 'salesperson';
+        metadata?: Record<string, unknown>;
+        language?: string;
+        personality?: string;
+        avatar_id?: string;
+        voice_id?: string;
+        site_url?: string;
+      };
 
     if (!product_type || !['persona', 'salesperson'].includes(product_type)) {
       return reply.status(400).send({ error: 'product_type must be "persona" or "salesperson"' });
@@ -36,6 +38,7 @@ export function registerSessionRoutes(
     if (personality) mergedMetadata.personality = personality;
     if (avatar_id) mergedMetadata.avatar_id = avatar_id;
     if (voice_id) mergedMetadata.voice_id = voice_id;
+    if (site_url) mergedMetadata.site_url = site_url;
 
     const session = await sessionService.create(request.auth!.tenantId, product_type, mergedMetadata);
     // The widget reads `session_id`; the DB row uses `id`. Expose both.
@@ -52,7 +55,7 @@ export function registerSessionRoutes(
     }
 
     try {
-      const result = await agentService.sendMessage(id, request.auth!.tenantId, text);
+      const result = await agentService.sendMessage(id, request.auth!.tenantId, text, request.id);
       // Absolute URL on the origin the client reached the API on, so the
       // browser <audio> element can fetch it cross-origin.
       const audioUrl = result.audioId

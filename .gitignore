@@ -31,3 +31,6 @@ logs/
 Thumbs.db
 .idea/
 .vscode/
+
+# Qwen Code local scratch + settings (may contain secrets — never commit)
+.qwen/

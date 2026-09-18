@@ -51,10 +51,12 @@ export class AgentCore {
   /**
    * Run a single user message through the agent:
    * LLM (with content tools) -> optional TTS -> cost recording.
+   * `traceId` (the host request id) is threaded into the provider context so
+   * the cost ledger records the same correlation id as the HTTP layer.
    */
-  async handleMessage(sessionId: string, userText: string): Promise<MessageResult> {
+  async handleMessage(sessionId: string, userText: string, traceId?: string): Promise<MessageResult> {
     const state = this.requireSession(sessionId);
-    const ctx = this.deps.makeContext(state.tenantId, state.sessionId);
+    const ctx = this.deps.makeContext(state.tenantId, state.sessionId, traceId);
 
     const history = this.memory.get(sessionId);
     const messages: ChatMessage[] = [
@@ -78,7 +80,11 @@ export class AgentCore {
 
       messages.push({ role: 'assistant', content: response.content });
       for (const call of toolCalls) {
-        const toolResult = await executeContentTool(this.deps.content, call);
+        const toolResult = await executeContentTool(
+          this.deps.content,
+          call,
+          state.persona.siteUrl,
+        );
         messages.push({
           role: 'tool',
           content: toolResult,

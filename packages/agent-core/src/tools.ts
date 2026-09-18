@@ -34,18 +34,19 @@ export const CONTENT_TOOLS: ToolDefinition[] = [
 export async function executeContentTool(
   content: ContentToolProvider,
   call: ToolCall,
+  siteUrl?: string,
 ): Promise<string> {
   const args: Record<string, unknown> = call.arguments ?? {};
 
   switch (call.name) {
     case 'search_posts': {
       const query = String(args.query ?? '');
-      const result = await content.searchPosts(query);
+      const result = await content.searchPosts(query, siteUrl);
       return JSON.stringify(result.posts);
     }
     case 'get_post': {
       const postId = String(args.post_id ?? '');
-      const post = await content.getPost(postId);
+      const post = await content.getPost(postId, siteUrl);
       return JSON.stringify(post ?? { error: 'not_found' });
     }
     default:

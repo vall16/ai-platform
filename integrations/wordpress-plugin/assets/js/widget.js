@@ -6,7 +6,7 @@
   'use strict';
 
   const config = window.aiPersonaConfig;
-  if (!config || !config.apiKey) return;
+  if (!config) return;
 
   const {
     widgetId,
@@ -23,6 +23,13 @@
 
   const el = document.getElementById(widgetId);
   if (!el) return;
+
+  if (!apiKey || !apiBase) {
+    el.innerHTML =
+      '<div class="ai-persona-not-configured">AI Persona is not configured. ' +
+      'Set the API Base URL and API Key in Settings → AI Persona.</div>';
+    return;
+  }
 
   // --- State ---
   let sessionId = null;
@@ -71,6 +78,8 @@
         voice_id: voiceId,
         language,
         personality,
+        // Origin of this site: lets the agent fetch live content from the WP REST API.
+        site_url: window.location.origin,
       }),
     });
 

@@ -17,6 +17,12 @@ export interface AgentPersona {
   greeting: string;
   siteName?: string;
   siteDescription?: string;
+  /**
+   * Origin of the host site (e.g. "https://example.com"). When present, the
+   * content bridge fetches live content from this site's WordPress REST API;
+   * when absent, the mock content is used.
+   */
+  siteUrl?: string;
 }
 
 /** Synthesized audio produced for a turn (served by the host backend). */
@@ -63,8 +69,8 @@ export interface ContentSearchResult {
  * the mock returns deterministic content so the pipeline is testable offline.
  */
 export interface ContentToolProvider {
-  searchPosts(query: string): Promise<ContentSearchResult>;
-  getPost(postId: string): Promise<ContentPost | null>;
+  searchPosts(query: string, siteUrl?: string): Promise<ContentSearchResult>;
+  getPost(postId: string, siteUrl?: string): Promise<ContentPost | null>;
 }
 
 /** Everything the AgentCore needs to run. Injected by the host (backend). */
@@ -74,8 +80,12 @@ export interface AgentDependencies {
   avatar?: AvatarProvider;
   content: ContentToolProvider;
   ledger: CostLedger;
-  /** Build a ProviderContext for a tenant/session (trace id, etc.). */
-  makeContext: (tenantId: TenantId, sessionId: SessionId) => ProviderContext;
+  /**
+   * Build a ProviderContext for a tenant/session (trace id, etc.).
+   * `traceId` is the host's request id, passed so logs, response headers and
+   * the cost ledger all share one correlation id end-to-end.
+   */
+  makeContext: (tenantId: TenantId, sessionId: SessionId, traceId?: string) => ProviderContext;
 }
 
 /** Per-session runtime state held by the AgentCore. */

@@ -11,18 +11,25 @@ import type { ProviderContext, TenantId, SessionId } from '@ai-platform/contract
 import { CostLedger } from '@ai-platform/cost-ledger';
 import type { AgentDependencies } from '@ai-platform/agent-core';
 import { MockLLMProvider, MockTTSProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
+import { ContentBridge, WordPressContentToolProvider } from './wordpress-content.js';
 
 export function createAgentDependencies(pool: Pool): AgentDependencies {
   return {
     llm: new MockLLMProvider(),
     tts: new MockTTSProvider(),
-    content: new MockContentToolProvider(),
+    // Live WordPress content when a session carries a site_url, mock otherwise.
+    content: new ContentBridge(new WordPressContentToolProvider(), new MockContentToolProvider()),
     ledger: new CostLedger(pool),
-    makeContext: (tenantId: TenantId, sessionId: SessionId): ProviderContext => ({
-      tenantId,
-      sessionId,
-      requestId: randomUUID(),
-      traceId: randomUUID(),
-    }),
+    makeContext: (tenantId: TenantId, sessionId: SessionId, traceId?: string): ProviderContext => {
+      // Reuse the host request id when provided so logs, the X-Trace-Id header
+      // and the cost ledger all carry one correlation id end-to-end.
+      const id = traceId ?? randomUUID();
+      return {
+        tenantId,
+        sessionId,
+        requestId: id,
+        traceId: id,
+      };
+    },
   };
 }

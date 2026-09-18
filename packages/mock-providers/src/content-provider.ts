@@ -32,7 +32,7 @@ const POSTS: ContentPost[] = [
 ];
 
 export class MockContentToolProvider implements ContentToolProvider {
-  async searchPosts(query: string): Promise<ContentSearchResult> {
+  async searchPosts(query: string, _siteUrl?: string): Promise<ContentSearchResult> {
     const q = query.trim().toLowerCase();
     const posts = q
       ? POSTS.filter(
@@ -45,7 +45,7 @@ export class MockContentToolProvider implements ContentToolProvider {
     return { posts };
   }
 
-  async getPost(postId: string): Promise<ContentPost | null> {
+  async getPost(postId: string, _siteUrl?: string): Promise<ContentPost | null> {
     return POSTS.find((p) => p.id === postId) ?? null;
   }
 }

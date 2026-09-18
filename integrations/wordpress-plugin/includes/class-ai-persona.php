@@ -33,6 +33,7 @@ class AI_Persona
         // Default options.
         if (false === get_option('ai_persona_settings')) {
             add_option('ai_persona_settings', [
+                'api_base'     => '',
                 'api_key'      => '',
                 'avatar_id'    => '',
                 'voice_id'     => '',
@@ -113,6 +114,11 @@ class AI_Persona
             AI_PERSONA_VERSION,
             true
         );
+        wp_localize_script(
+            'ai-persona-admin',
+            'aiPersonaAdmin',
+            ['apiBase' => $this->get_api_base()]
+        );
     }
 
     public function register_rest_routes(): void
@@ -142,6 +148,7 @@ class AI_Persona
     private function get_settings(): array
     {
         $defaults = [
+            'api_base'     => '',
             'api_key'      => '',
             'avatar_id'    => '',
             'voice_id'     => '',
@@ -157,8 +164,6 @@ class AI_Persona
     private function get_api_base(): string
     {
         $settings = $this->get_settings();
-        return !empty($settings['api_key'])
-            ? 'https://api.ai-platform.local'
-            : '';
+        return rtrim((string) ($settings['api_base'] ?? ''), '/');
     }
 }

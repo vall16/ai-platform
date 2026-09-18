@@ -67,13 +67,19 @@ export class AgentService {
       greeting: typeof meta.greeting === 'string' ? meta.greeting : 'Ciao! Come posso aiutarti?',
       siteName: typeof meta.site_name === 'string' ? meta.site_name : undefined,
       siteDescription: typeof meta.site_description === 'string' ? meta.site_description : undefined,
+      siteUrl: typeof meta.site_url === 'string' ? meta.site_url : undefined,
     };
   }
 
   /** Run one user message through the agent and persist audio + cost. */
-  async sendMessage(sessionId: string, tenantId: string, text: string): Promise<AgentMessageResult> {
+  async sendMessage(
+    sessionId: string,
+    tenantId: string,
+    text: string,
+    traceId?: string,
+  ): Promise<AgentMessageResult> {
     await this.ensureSession(sessionId, tenantId);
-    const result = await this.core.handleMessage(sessionId, text);
+    const result = await this.core.handleMessage(sessionId, text, traceId);
 
     let audioId: string | undefined;
     if (result.audio) {

@@ -35,4 +35,5 @@ CREATE TABLE subscription (
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_subscription_tenant ON subscription (tenant_id);
+-- Unique: BillingService.subscribe upserts with ON CONFLICT (tenant_id).
+CREATE UNIQUE INDEX idx_subscription_tenant ON subscription (tenant_id);

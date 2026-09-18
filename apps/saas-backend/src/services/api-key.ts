@@ -50,6 +50,6 @@ export class ApiKeyService {
       `UPDATE api_key SET status = 'revoked' WHERE id = $1 AND tenant_id = $2 AND status = 'active'`,
       [id, tenantId],
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 }

@@ -36,6 +36,7 @@ class AI_Persona_Settings
     public function sanitize(array $input): array
     {
         $output = [];
+        $output['api_base']     = esc_url_raw($input['api_base'] ?? '');
         $output['api_key']      = sanitize_text_field($input['api_key'] ?? '');
         $output['avatar_id']    = sanitize_text_field($input['avatar_id'] ?? '');
         $output['voice_id']     = sanitize_text_field($input['voice_id'] ?? '');
@@ -52,6 +53,7 @@ class AI_Persona_Settings
     public function render_page(): void
     {
         $settings = wp_parse_args(get_option('ai_persona_settings', []), [
+            'api_base'     => '',
             'api_key'      => '',
             'avatar_id'    => '',
             'voice_id'     => '',
@@ -70,6 +72,17 @@ class AI_Persona_Settings
 
                 <h2><?php esc_html_e('Connection', 'ai-persona'); ?></h2>
                 <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">
+                            <label for="ai-persona-api-base"><?php esc_html_e('API Base URL', 'ai-persona'); ?></label>
+                        </th>
+                        <td>
+                            <input type="url" id="ai-persona-api-base" name="ai_persona_settings[api_base]"
+                                   value="<?php echo esc_attr($settings['api_base']); ?>" class="regular-text"
+                                   placeholder="https://api.example.com" />
+                            <p class="description"><?php esc_html_e('Base URL of your AI Platform backend (no trailing slash). E.g. https://api.example.com', 'ai-persona'); ?></p>
+                        </td>
+                    </tr>
                     <tr>
                         <th scope="row">
                             <label for="ai-persona-api-key"><?php esc_html_e('API Key', 'ai-persona'); ?></label>
