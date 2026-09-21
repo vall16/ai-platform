@@ -7,18 +7,25 @@
 import { randomUUID } from 'node:crypto';
 import { CostLedger } from '@ai-platform/cost-ledger';
 import { MockLLMProvider, MockTTSProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
+import { ContentBridge, WordPressContentToolProvider } from './wordpress-content.js';
 export function createAgentDependencies(pool) {
     return {
         llm: new MockLLMProvider(),
         tts: new MockTTSProvider(),
-        content: new MockContentToolProvider(),
+        // Live WordPress content when a session carries a site_url, mock otherwise.
+        content: new ContentBridge(new WordPressContentToolProvider(), new MockContentToolProvider()),
         ledger: new CostLedger(pool),
-        makeContext: (tenantId, sessionId) => ({
-            tenantId,
-            sessionId,
-            requestId: randomUUID(),
-            traceId: randomUUID(),
-        }),
+        makeContext: (tenantId, sessionId, traceId) => {
+            // Reuse the host request id when provided so logs, the X-Trace-Id header
+            // and the cost ledger all carry one correlation id end-to-end.
+            const id = traceId ?? randomUUID();
+            return {
+                tenantId,
+                sessionId,
+                requestId: id,
+                traceId: id,
+            };
+        },
     };
 }
 //# sourceMappingURL=factory.js.map

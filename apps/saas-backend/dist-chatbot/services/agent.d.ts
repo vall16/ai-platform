@@ -20,7 +20,7 @@ export declare class AgentService {
     private buildState;
     private buildPersona;
     /** Run one user message through the agent and persist audio + cost. */
-    sendMessage(sessionId: string, tenantId: string, text: string): Promise<AgentMessageResult>;
+    sendMessage(sessionId: string, tenantId: string, text: string, traceId?: string): Promise<AgentMessageResult>;
     /** Stop the agent for a session (clears in-session memory). */
     close(sessionId: string): Promise<void>;
 }
