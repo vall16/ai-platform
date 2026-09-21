@@ -3,18 +3,24 @@ package scoring
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/ai-platform/router/internal/provider"
+	"github.com/ai-platform/router/internal/quota"
+	"github.com/ai-platform/router/internal/resilience"
 )
 
 // Weights for the scoring formula. Must sum to 1.0.
-var DefaultWeights = struct {
-	Cost       float64
-	Latency    float64
+type Weights struct {
+	Cost        float64
+	Latency     float64
 	Reliability float64
-}{
-	Cost:       0.4,
-	Latency:    0.3,
+}
+
+// DefaultWeights is the default scoring configuration.
+var DefaultWeights = Weights{
+	Cost:        0.4,
+	Latency:     0.3,
 	Reliability: 0.3,
 }
 
@@ -23,7 +29,8 @@ type Candidate struct {
 	ProviderID string  `json:"provider_id"`
 	Name       string  `json:"name"`
 	Score      float64 `json:"score"`
-	Reason     string  `json:"reason,omitempty"`
+	Eligible   bool    `json:"eligible"`
+	SkipReason string  `json:"skip_reason,omitempty"` // "unhealthy", "circuit_open", "over_quota"
 }
 
 // Result is the output of a routing decision.
@@ -32,75 +39,158 @@ type Result struct {
 	Score              float64     `json:"score"`
 	Candidates         []Candidate `json:"candidates"`
 	Reason             string      `json:"reason"`
+	Failover           bool        `json:"failover"`
 }
 
-// Engine scores providers and selects the best one for a given resource type.
+// Engine scores providers and selects the best available one for a given
+// resource type, applying health, circuit-breaker and quota gates and failing
+// over to the next-best candidate when the top one is unavailable.
 type Engine struct {
 	registry *provider.Registry
-	weights  struct {
-		Cost       float64
-		Latency    float64
-		Reliability float64
-	}
+	weights  Weights
+	breakers *resilience.Manager
+	tracker  *quota.Tracker
 }
 
-// NewEngine creates a scoring engine with the given registry and default weights.
-func NewEngine(reg *provider.Registry) *Engine {
+// NewEngine creates a scoring engine with the given registry, circuit-breaker
+// manager and capacity tracker. breakers or tracker may be nil to disable the
+// corresponding gate.
+func NewEngine(reg *provider.Registry, breakers *resilience.Manager, tracker *quota.Tracker) *Engine {
 	return &Engine{
 		registry: reg,
 		weights:  DefaultWeights,
+		breakers: breakers,
+		tracker:  tracker,
 	}
 }
 
 // SetWeights overrides the scoring weights.
-func (e *Engine) SetWeights(w struct {
-	Cost       float64
-	Latency    float64
-	Reliability float64
-}) {
-	e.weights = w
+func (e *Engine) SetWeights(w Weights) { e.weights = w }
+
+// RecordOutcome feeds a call outcome back into the circuit breaker for a
+// provider, driving its open/half-open/closed transitions.
+func (e *Engine) RecordOutcome(providerID string, success bool) {
+	if e.breakers == nil {
+		return
+	}
+	if success {
+		e.breakers.RecordSuccess(providerID)
+	} else {
+		e.breakers.RecordFailure(providerID)
+	}
 }
 
-// Route evaluates all providers of the given type and returns the best candidate.
+// Release frees a session slot previously reserved for a provider.
+func (e *Engine) Release(providerID string) {
+	if e.tracker != nil {
+		e.tracker.Release(providerID)
+	}
+}
+
+// Route evaluates all providers of the given type and returns the best
+// available candidate, failing over to the next-best when the top one is
+// unhealthy, circuit-open or over quota.
 func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) (*Result, error) {
 	candidates := e.registry.ByType(resourceType)
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no providers registered for type %s", resourceType)
 	}
 
-	scored := make([]Candidate, 0, len(candidates))
-	var best *Candidate
+	type eval struct {
+		provider provider.Provider
+		cand     Candidate
+	}
+	evals := make([]eval, 0, len(candidates))
 
 	for _, p := range candidates {
-		health, err := p.Health(ctx)
-		if err != nil || health.Status == "unhealthy" {
-			continue
-		}
-
-		score := e.scoreProvider(p)
 		c := Candidate{
 			ProviderID: p.ID(),
 			Name:       p.Name(),
-			Score:      round4(score),
+			Score:      round4(e.scoreProvider(p)),
+			Eligible:   true,
 		}
-		scored = append(scored, c)
 
-		if best == nil || score > best.Score {
-			scored[len(scored)-1] = c
-			best = &scored[len(scored)-1]
+		// Health gate.
+		health, err := p.Health(ctx)
+		if err != nil || health.Status == "unhealthy" {
+			c.Eligible = false
+			c.SkipReason = "unhealthy"
+			evals = append(evals, eval{provider: p, cand: c})
+			continue
+		}
+
+		// Circuit-breaker gate.
+		if e.breakers != nil && !e.breakers.For(p.ID()).Allow() {
+			c.Eligible = false
+			c.SkipReason = "circuit_open"
+			evals = append(evals, eval{provider: p, cand: c})
+			continue
+		}
+
+		// Quota gate (peek; the slot is reserved atomically on selection).
+		if e.tracker != nil {
+			caps, _ := p.Capabilities()
+			if caps.MaxConcurrentSessions > 0 && e.tracker.Active(p.ID()) >= caps.MaxConcurrentSessions {
+				c.Eligible = false
+				c.SkipReason = "over_quota"
+				evals = append(evals, eval{provider: p, cand: c})
+				continue
+			}
+		}
+
+		evals = append(evals, eval{provider: p, cand: c})
+	}
+
+	// Sort by score, best first.
+	sort.SliceStable(evals, func(i, j int) bool {
+		return evals[i].cand.Score > evals[j].cand.Score
+	})
+
+	// Failover: reserve the first eligible candidate's quota slot.
+	var selected *eval
+	for i := range evals {
+		if !evals[i].cand.Eligible {
+			continue
+		}
+		if e.tracker != nil {
+			caps, _ := evals[i].provider.Capabilities()
+			limit := caps.MaxConcurrentSessions
+			if limit > 0 && !e.tracker.TryAcquire(evals[i].provider.ID(), limit) {
+				// Lost a race for the last slot; fall through to the next candidate.
+				evals[i].cand.Eligible = false
+				evals[i].cand.SkipReason = "over_quota"
+				continue
+			}
+		}
+		selected = &evals[i]
+		break
+	}
+
+	if selected == nil {
+		return nil, fmt.Errorf("no available providers for type %s", resourceType)
+	}
+
+	resultCandidates := make([]Candidate, 0, len(evals))
+	failover := false
+	for i := range evals {
+		resultCandidates = append(resultCandidates, evals[i].cand)
+		if evals[i].cand.ProviderID == selected.cand.ProviderID && i > 0 {
+			failover = true
 		}
 	}
 
-	if best == nil {
-		return nil, fmt.Errorf("no healthy providers available for type %s", resourceType)
+	reason := fmt.Sprintf("highest eligible score (weights cost=%.2f, latency=%.2f, reliability=%.2f)",
+		e.weights.Cost, e.weights.Latency, e.weights.Reliability)
+	if failover {
+		reason = "failover: top candidate unavailable, selected next eligible provider"
 	}
 
 	return &Result{
-		SelectedProviderID: best.ProviderID,
-		Score:              best.Score,
-		Candidates:         scored,
-		Reason:             fmt.Sprintf("highest composite score (cost=%.2f, latency=%.2f, reliability=%.2f)",
-			e.weights.Cost, e.weights.Latency, e.weights.Reliability),
+		SelectedProviderID: selected.cand.ProviderID,
+		Score:              selected.cand.Score,
+		Candidates:         resultCandidates,
+		Reason:             reason,
+		Failover:           failover,
 	}, nil
 }
 

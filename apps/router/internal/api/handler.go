@@ -26,6 +26,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/route", s.handleRoute)
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/providers", s.handleProviders)
+	mux.HandleFunc("POST /api/v1/providers/{id}/outcome", s.handleOutcome)
+	mux.HandleFunc("POST /api/v1/providers/{id}/release", s.handleRelease)
 }
 
 // RouteRequest is the body for POST /api/v1/route.
@@ -38,11 +40,12 @@ type RouteRequest struct {
 
 // RouteResponse is the response for POST /api/v1/route.
 type RouteResponse struct {
-	SelectedProviderID string                 `json:"selected_provider_id"`
-	Score              float64                `json:"score"`
-	Candidates         []scoring.Candidate    `json:"candidates"`
-	Reason             string                 `json:"reason"`
-	DecidedAt          time.Time              `json:"decided_at"`
+	SelectedProviderID string                `json:"selected_provider_id"`
+	Score              float64               `json:"score"`
+	Candidates         []scoring.Candidate   `json:"candidates"`
+	Reason             string                `json:"reason"`
+	Failover           bool                  `json:"failover"`
+	DecidedAt          time.Time             `json:"decided_at"`
 }
 
 func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
@@ -69,8 +72,45 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		Score:              result.Score,
 		Candidates:         result.Candidates,
 		Reason:             result.Reason,
+		Failover:           result.Failover,
 		DecidedAt:          time.Now().UTC(),
 	})
+}
+
+// OutcomeRequest is the body for POST /api/v1/providers/{id}/outcome.
+type OutcomeRequest struct {
+	Success bool `json:"success"`
+}
+
+// handleOutcome records a call outcome for a provider, driving its circuit
+// breaker. Called by the session manager once a routed call completes.
+func (s *Server) handleOutcome(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider id is required"})
+		return
+	}
+
+	var req OutcomeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	s.engine.RecordOutcome(id, req.Success)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "recorded", "provider_id": id})
+}
+
+// handleRelease frees a session slot previously reserved for a provider.
+func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider id is required"})
+		return
+	}
+
+	s.engine.Release(id)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "released", "provider_id": id})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {

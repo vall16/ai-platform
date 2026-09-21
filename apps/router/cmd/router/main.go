@@ -10,6 +10,8 @@ import (
 
 	"github.com/ai-platform/router/internal/api"
 	"github.com/ai-platform/router/internal/provider"
+	"github.com/ai-platform/router/internal/quota"
+	"github.com/ai-platform/router/internal/resilience"
 	"github.com/ai-platform/router/internal/scoring"
 )
 
@@ -49,8 +51,10 @@ func main() {
 		SuccessRate: 0.99,
 	}))
 
-	// Build scoring engine.
-	engine := scoring.NewEngine(registry)
+	// Build resilience + capacity dependencies and the scoring engine.
+	breakers := resilience.NewManager(resilience.DefaultConfig())
+	tracker := quota.NewTracker()
+	engine := scoring.NewEngine(registry, breakers, tracker)
 
 	// Build HTTP server.
 	server := api.NewServer(engine, registry)
