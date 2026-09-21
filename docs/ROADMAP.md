@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 1 — MVP: AI Persona su WordPress** · Aggiornato: 2026-09-15
+> Stato: **Phase 1 — MVP: AI Persona su WordPress** · Aggiornato: 2026-09-21
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -32,7 +32,7 @@
 ### Phase 1 — MVP: AI Persona su WordPress (in corso)
 **Obiettivo:** un flusso end-to-end reale, un solo prodotto, 1–2 provider.
 
-**Stato (2026-09-15):** in corso, **de-scoped su chatbot** — pipeline conversazione + TTS senza avatar realtime (l'avatar resta opzionale nel design di AgentCore). Fatto: Agent Core (conversazione, memoria in-sessione, tool `search_posts`/`get_post`, prompting) con mock LLM e test unitari; SaaS backend session manager + endpoint `POST /sessions/:id/messages` e `GET /sessions/:id/audio/:audioId`; Cost Ledger per-session (llm/tts). Da fare: billing Stripe, observability, Control Room v0, router scoring, e2e completo.
+**Stato (2026-09-21):** in corso, **de-scoped su chatbot** — pipeline conversazione + TTS senza avatar realtime (l'avatar resta opzionale nel design di AgentCore). Fatto: Agent Core (conversazione, memoria in-sessione, tool `search_posts`/`get_post`, prompting) con mock LLM e test unitari; SaaS backend session manager + endpoint `POST /sessions/:id/messages` e `GET /sessions/:id/audio/:audioId`; Cost Ledger per-session (llm/tts); **Control Room v0** (API overview + dashboard self-contained); **billing Stripe** (subscribe/cancel/webhook); **observability** (registry Prometheus self-contained, endpoint `/metrics`); **content tool bridge** (provider WordPress REST con `site_url` per sessione + fallback mock); plugin WordPress (API base configurabile, validazione chiave reale, CORS, error handling); **router Go** (compila + `go vet`; scoring base cost/latency/reliability + health check, verificato end-to-end con mock provider). Da fare: router quota-aware + circuit breaker + failover, e2e completo, OTel `trace_id` end-to-end + log strutturati.
 
 - SaaS backend: tenant, auth, billing (Stripe), session manager
 - Agent Core: conversazione, memoria in-sessione, tool invocation (`search_posts`, `get_post`, …), prompting
@@ -116,5 +116,5 @@
 
 - **Stack:** TypeScript/Node (SaaS + business logic), Go (router), Postgres, Redis, WebSocket/WebRTC, S3, queue, Docker, OTel/Prometheus/Grafana/Loki.
 - **Package manager:** npm (workspaces) — pnpm non installato in ambiente.
-- **Go:** non installato in ambiente corrente → il router viene scritto ma non compilato finché Go non è disponibile.
+- **Go:** Go 1.27.1 installato in `C:\Users\crist\go-sdk` (bin nel PATH utente). Il router compila (`go build`), passa `go vet` e risponde end-to-end (`/api/v1/health`, `/api/v1/providers`, `/api/v1/route`) con mock provider. Build: `go build -o router.exe ./cmd/router` da `apps/router`.
 - **Nomi/identificatori** in inglese; documentazione in italiano.
