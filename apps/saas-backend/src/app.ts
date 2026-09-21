@@ -1,9 +1,9 @@
 // Fastify app factory — wires config, pool, services, and routes.
 
-import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { Config } from './config.js';
+import { continueTrace, buildTraceparent, type TraceContext } from './observability/trace.js';
 import { getPool, closePool } from './db/pool.js';
 import { createAuthMiddleware } from './middleware/auth.js';
 import { TenantService } from './services/tenant.js';
@@ -38,18 +38,27 @@ export async function buildApp(config: Config): Promise<{ app: FastifyInstance; 
   const app = Fastify({
     logger: true,
     bodyLimit: 1_048_576, // 1 MB
-    // One UUID per request: becomes the trace id shared by logs (reqId),
-    // the X-Trace-Id response header and the cost ledger.
-    genReqId: () => randomUUID(),
+    // Continue an inbound W3C trace (traceparent / X-Trace-Id) or start a new
+    // one. The resulting trace id becomes request.id, shared by logs (reqId),
+    // the X-Trace-Id + traceparent response headers and the cost ledger.
+    genReqId: (req) => {
+      const ctx = continueTrace(req.headers);
+      (req as { traceContext?: TraceContext }).traceContext = ctx;
+      return ctx.traceId;
+    },
   });
 
   app.addHook('onRequest', async (request) => {
     (request as { startTime?: bigint }).startTime = process.hrtime.bigint();
   });
 
-  // Set the trace header before the response is sent (onResponse is too late).
+  // Set the trace headers before the response is sent (onResponse is too late):
+  // X-Trace-Id (bare trace id) and traceparent (W3C) for downstream propagation.
   app.addHook('onSend', async (request, reply) => {
+    const ctx =
+      (request as { traceContext?: TraceContext }).traceContext ?? continueTrace(request.headers);
     reply.header('X-Trace-Id', request.id);
+    reply.header('traceparent', buildTraceparent(ctx));
   });
 
   app.addHook('onResponse', async (request, reply) => {

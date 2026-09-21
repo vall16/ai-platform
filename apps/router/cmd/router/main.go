@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ai-platform/router/internal/api"
+	"github.com/ai-platform/router/internal/obs"
 	"github.com/ai-platform/router/internal/provider"
 	"github.com/ai-platform/router/internal/quota"
 	"github.com/ai-platform/router/internal/resilience"
@@ -56,8 +56,11 @@ func main() {
 	tracker := quota.NewTracker()
 	engine := scoring.NewEngine(registry, breakers, tracker)
 
+	// Structured JSON logger (carries trace_id per request).
+	logger := obs.New(os.Stdout, "router")
+
 	// Build HTTP server.
-	server := api.NewServer(engine, registry)
+	server := api.NewServer(engine, registry, logger)
 	mux := http.NewServeMux()
 	server.Routes(mux)
 
@@ -75,9 +78,10 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("router listening on %s", addr)
+		logger.Info("router listening", "addr", addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			logger.Error("server error", "err", err.Error())
+			os.Exit(1)
 		}
 	}()
 
@@ -86,6 +90,6 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	log.Println("shutting down...")
+	logger.Info("shutting down")
 	httpServer.Close()
 }
