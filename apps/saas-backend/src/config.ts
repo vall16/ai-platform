@@ -7,6 +7,7 @@ export interface Config {
   stripeSecretKey: string;
   stripeWebhookSecret: string;
   apiKeyPrefix: string;
+  sessionPriceMicroUsd: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -17,5 +18,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     stripeSecretKey: env.STRIPE_SECRET_KEY ?? '',
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
     apiKeyPrefix: env.API_KEY_PREFIX ?? 'sk_live_',
+    // Flat per-session price (micro USD) stamped onto each session at creation.
+    // Phase 1 revenue model; real per-product pricing lands in Phase 2/4.
+    sessionPriceMicroUsd: parseInt(env.SESSION_PRICE_MICRO_USD ?? '100000', 10),
   };
 }

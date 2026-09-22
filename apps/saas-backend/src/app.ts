@@ -94,7 +94,7 @@ export async function buildApp(
   // Services.
   const tenantService = new TenantService(pool);
   const apiKeyService = new ApiKeyService(pool, config.apiKeyPrefix);
-  const sessionService = new SessionService(pool);
+  const sessionService = new SessionService(pool, config.sessionPriceMicroUsd);
   const billingService = new BillingService(pool, config.stripeSecretKey);
   const controlRoomService = new ControlRoomService(pool);
 

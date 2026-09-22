@@ -4,14 +4,17 @@ import type { Pool } from 'pg';
 import type { Session, ProductType, SessionStatus } from '@ai-platform/db';
 
 export class SessionService {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly sessionPriceMicroUsd = 0,
+  ) {}
 
   async create(tenantId: string, productType: ProductType, metadata?: Record<string, unknown>): Promise<Session> {
     const result = await this.pool.query(
-      `INSERT INTO session (tenant_id, product_type, metadata)
-       VALUES ($1, $2, $3)
-       RETURNING id, tenant_id, product_type, status, started_at, ended_at, total_cost_micro_usd, metadata, created_at`,
-      [tenantId, productType, JSON.stringify(metadata ?? {})],
+      `INSERT INTO session (tenant_id, product_type, metadata, revenue_micro_usd)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, tenant_id, product_type, status, started_at, ended_at, total_cost_micro_usd, revenue_micro_usd, metadata, created_at`,
+      [tenantId, productType, JSON.stringify(metadata ?? {}), this.sessionPriceMicroUsd],
     );
     return result.rows[0] as Session;
   }

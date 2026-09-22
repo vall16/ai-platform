@@ -58,6 +58,7 @@ export interface Session {
   started_at: string;
   ended_at: string | null;
   total_cost_micro_usd: number;
+  revenue_micro_usd: number;
   metadata: Record<string, unknown>;
   created_at: string;
 }

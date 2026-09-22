@@ -127,8 +127,13 @@ function render(o) {
   $('c-cost1m').textContent = usd(o.cost.last_1m_micro_usd);
   $('c-costtoday').textContent = usd(o.cost.today_micro_usd);
   $('c-costtotal').textContent = usd(o.cost.total_micro_usd);
-  $('c-margin').textContent = o.margin.available ? 'n/d' : 'n/d';
-  $('c-margin-hint').textContent = 'in attesa revenue';
+  if (o.margin.available) {
+    $('c-margin').textContent = o.margin.gross_margin_pct == null ? 'n/d' : o.margin.gross_margin_pct.toFixed(1) + '%';
+    $('c-margin-hint').textContent = 'rev ' + usd(o.margin.revenue_micro_usd) + ' · cost ' + usd(o.margin.cost_micro_usd);
+  } else {
+    $('c-margin').textContent = 'n/d';
+    $('c-margin-hint').textContent = 'in attesa revenue';
+  }
 
   const statusRows = Object.entries(o.sessions.by_status).map(([k, v]) => [esc(k), v]);
   const prodRows = Object.entries(o.sessions.by_product_type).map(([k, v]) => [esc(k), v]);

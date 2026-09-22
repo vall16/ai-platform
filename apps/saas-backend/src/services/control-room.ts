@@ -20,6 +20,10 @@ export interface ControlRoomOverview {
   };
   margin: {
     available: boolean;
+    revenue_micro_usd: number;
+    cost_micro_usd: number;
+    gross_margin_micro_usd: number;
+    gross_margin_pct: number | null;
     note: string;
   };
   providers: Array<{ id: string; name: string; type: string; status: string }>;
@@ -36,10 +40,16 @@ export class ControlRoomService {
   constructor(private readonly pool: Pool) {}
 
   async overview(): Promise<ControlRoomOverview> {
-    const [statusRows, productRows, costRow, resourceRows, providerRows, usageRows] =
+    const [statusRows, productRows, revenueRow, costRow, resourceRows, providerRows, usageRows] =
       await Promise.all([
         this.pool.query(`SELECT status, COUNT(*)::int AS n FROM session GROUP BY status`),
         this.pool.query(`SELECT product_type, COUNT(*)::int AS n FROM session GROUP BY product_type`),
+        this.pool.query(
+          `SELECT
+             COALESCE(SUM(revenue_micro_usd) FILTER (WHERE started_at >= date_trunc('day', now())), 0)::bigint AS today,
+             COALESCE(SUM(revenue_micro_usd), 0)::bigint AS total
+           FROM session`,
+        ),
         this.pool.query(
           `SELECT
              COALESCE(SUM(cost_micro_usd) FILTER (WHERE created_at > now() - interval '1 minute'), 0)::bigint AS last_1m,
@@ -95,6 +105,11 @@ export class ControlRoomService {
       last_seen_at: u.last_seen_at,
     }));
 
+    const revenueTotal = Number(revenueRow.rows[0].total);
+    const costTotal = Number(costRow.rows[0].total);
+    const grossMargin = revenueTotal - costTotal;
+    const grossMarginPct = revenueTotal > 0 ? (grossMargin / revenueTotal) * 100 : null;
+
     return {
       generated_at: new Date().toISOString(),
       sessions: { active, total, by_status, by_product_type },
@@ -102,12 +117,16 @@ export class ControlRoomService {
         last_1m_micro_usd: Number(costRow.rows[0].last_1m),
         last_5m_micro_usd: Number(costRow.rows[0].last_5m),
         today_micro_usd: Number(costRow.rows[0].today),
-        total_micro_usd: Number(costRow.rows[0].total),
+        total_micro_usd: costTotal,
         by_resource_type,
       },
       margin: {
-        available: false,
-        note: 'Revenue tracking not yet wired (Phase 2 Cost Ledger). margin = (revenue - cost) / revenue.',
+        available: true,
+        revenue_micro_usd: revenueTotal,
+        cost_micro_usd: costTotal,
+        gross_margin_micro_usd: grossMargin,
+        gross_margin_pct: grossMarginPct,
+        note: 'Flat per-session price (SESSION_PRICE_MICRO_USD) vs. usage_ledger cost. margin = (revenue - cost) / revenue.',
       },
       providers,
       provider_usage,
