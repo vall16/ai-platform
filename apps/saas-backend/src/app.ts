@@ -19,7 +19,8 @@ import { registerTenantRoutes } from './routes/tenants.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerControlRoomRoutes } from './routes/control-room.js';
-import { ControlRoomService } from './services/control-room.js';
+import { ControlRoomService, type HealthProvider } from './services/control-room.js';
+import type { Provider } from '@ai-platform/contracts';
 import { Metrics } from './metrics.js';
 
 export interface AppContext {
@@ -96,10 +97,22 @@ export async function buildApp(
   const apiKeyService = new ApiKeyService(pool, config.apiKeyPrefix);
   const sessionService = new SessionService(pool, config.sessionPriceMicroUsd);
   const billingService = new BillingService(pool, config.stripeSecretKey);
-  const controlRoomService = new ControlRoomService(pool);
 
   // Agent (chatbot) wiring — mock-first providers, real cost ledger.
-  const agentCore = new AgentCore(createAgentDependencies(pool));
+  const agentDeps = createAgentDependencies(pool);
+  // Expose the live agent providers to the Control Room so it can report their
+  // health (LLM/TTS/STT, plus avatar when configured).
+  const healthProviders: HealthProvider[] = [];
+  const addHealth = (p: Provider | undefined, type: string) => {
+    if (p) healthProviders.push({ id: p.id, name: p.name, type, getHealth: (ctx) => p.getHealth(ctx) });
+  };
+  addHealth(agentDeps.llm, 'llm');
+  addHealth(agentDeps.tts, 'tts');
+  addHealth(agentDeps.stt, 'stt');
+  addHealth(agentDeps.avatar, 'avatar');
+  const controlRoomService = new ControlRoomService(pool, healthProviders);
+
+  const agentCore = new AgentCore(agentDeps);
   const audioStore = new AudioStore();
   const agentService = new AgentService(agentCore, pool, audioStore);
 

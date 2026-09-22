@@ -42,3 +42,30 @@ test('control room margin pct is null when revenue is zero', async () => {
   assert.equal(o.margin.gross_margin_pct, null);
   assert.equal(o.margin.gross_margin_micro_usd, -300000);
 });
+
+test('control room reports provider health (healthy + failing -> unhealthy)', async () => {
+  const healthy = {
+    id: 'mock-llm-1',
+    name: 'mock-llm',
+    type: 'llm',
+    getHealth: async () => ({ status: 'healthy', latencyMs: 12, checkedAt: new Date().toISOString() }),
+  };
+  const broken = {
+    id: 'mock-tts-1',
+    name: 'mock-tts',
+    type: 'tts',
+    getHealth: async () => {
+      throw new Error('connection refused');
+    },
+  };
+  const svc = new ControlRoomService(makeFakePool(), [healthy, broken]);
+  const o = await svc.overview();
+
+  assert.equal(o.provider_health.length, 2);
+  const llm = o.provider_health.find((h) => h.id === 'mock-llm-1');
+  assert.equal(llm.status, 'healthy');
+  assert.equal(llm.latency_ms, 12);
+  const tts = o.provider_health.find((h) => h.id === 'mock-tts-1');
+  assert.equal(tts.status, 'unhealthy');
+  assert.equal(tts.detail, 'connection refused');
+});

@@ -2,6 +2,28 @@
 // Aggregates session, cost and provider-activity data for the internal ops dashboard.
 
 import type { Pool } from 'pg';
+import type { ProviderContext, HealthStatus } from '@ai-platform/contracts';
+
+/**
+ * A provider the Control Room can probe for health. The host wires the live
+ * agent providers (LLM/TTS/STT/avatar) here; each reports its own status.
+ */
+export interface HealthProvider {
+  id: string;
+  name: string;
+  type: string;
+  getHealth(ctx: ProviderContext): Promise<HealthStatus>;
+}
+
+export interface ProviderHealth {
+  id: string;
+  name: string;
+  type: string;
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  latency_ms: number;
+  checked_at: string;
+  detail?: string;
+}
 
 export interface ControlRoomOverview {
   generated_at: string;
@@ -34,13 +56,17 @@ export interface ControlRoomOverview {
     cost_last_5m_micro_usd: number;
     last_seen_at: string;
   }>;
+  provider_health: ProviderHealth[];
 }
 
 export class ControlRoomService {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly providers: HealthProvider[] = [],
+  ) {}
 
   async overview(): Promise<ControlRoomOverview> {
-    const [statusRows, productRows, revenueRow, costRow, resourceRows, providerRows, usageRows] =
+    const [statusRows, productRows, revenueRow, costRow, resourceRows, providerRows, usageRows, providerHealth] =
       await Promise.all([
         this.pool.query(`SELECT status, COUNT(*)::int AS n FROM session GROUP BY status`),
         this.pool.query(`SELECT product_type, COUNT(*)::int AS n FROM session GROUP BY product_type`),
@@ -73,6 +99,7 @@ export class ControlRoomService {
            GROUP BY provider_id
            ORDER BY last_seen_at DESC`,
         ),
+        this.gatherHealth(),
       ]);
 
     const by_status: Record<string, number> = {};
@@ -130,6 +157,47 @@ export class ControlRoomService {
       },
       providers,
       provider_usage,
+      provider_health: providerHealth,
     };
+  }
+
+  /**
+   * Probe every wired provider for health. A provider that throws (or is
+   * unreachable) is reported as `unhealthy` with the error as detail, so one
+   * bad provider never breaks the overview.
+   */
+  private async gatherHealth(): Promise<ProviderHealth[]> {
+    const ctx: ProviderContext = {
+      tenantId: 'platform',
+      sessionId: 'control-room',
+      requestId: 'control-room-health',
+      traceId: 'control-room-health',
+    };
+    return Promise.all(
+      this.providers.map(async (p): Promise<ProviderHealth> => {
+        try {
+          const h = await p.getHealth(ctx);
+          return {
+            id: p.id,
+            name: p.name,
+            type: p.type,
+            status: h.status,
+            latency_ms: h.latencyMs,
+            checked_at: h.checkedAt,
+            detail: h.detail,
+          };
+        } catch (err) {
+          return {
+            id: p.id,
+            name: p.name,
+            type: p.type,
+            status: 'unhealthy',
+            latency_ms: 0,
+            checked_at: new Date().toISOString(),
+            detail: err instanceof Error ? err.message : 'health check failed',
+          };
+        }
+      }),
+    );
   }
 }

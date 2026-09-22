@@ -60,6 +60,9 @@ const CONTROL_ROOM_HTML = `<!doctype html>
   .pill.active { color:var(--ok); border-color:var(--ok); }
   .pill.inactive, .pill.deprecated { color:var(--muted); }
   .pill.error { color:var(--bad); border-color:var(--bad); }
+  .pill.healthy { color:var(--ok); border-color:var(--ok); }
+  .pill.degraded { color:var(--warn); border-color:var(--warn); }
+  .pill.unhealthy { color:var(--bad); border-color:var(--bad); }
   .empty { color:var(--muted); font-size:13px; }
   .note { color:var(--warn); font-size:12px; }
   .foot { color:var(--muted); font-size:11px; text-align:center; padding:16px; }
@@ -100,6 +103,11 @@ const CONTROL_ROOM_HTML = `<!doctype html>
   </section>
 
   <section>
+    <h2>Provider — health</h2>
+    <div id="health" class="empty">n/d</div>
+  </section>
+
+  <section>
     <h2>Provider — catalogo registrato</h2>
     <div id="providers" class="empty">n/d</div>
   </section>
@@ -118,6 +126,13 @@ function table(headers, rows) {
   if (!rows.length) return '<div class="empty">nessun dato</div>';
   const th = headers.map((h, i) => '<th class="' + (i > 0 ? 'num' : '') + '">' + h + '</th>').join('');
   const tr = rows.map((r) => '<tr>' + r.map((c, i) => '<td class="' + (i > 0 ? 'num' : '') + '">' + c + '</td>').join('') + '</tr>').join('');
+  return '<table><thead><tr>' + th + '</tr></thead><tbody>' + tr + '</tbody></table>';
+}
+
+function healthTable(rows) {
+  if (!rows.length) return '<div class="empty">nessun provider cablato</div>';
+  const th = '<th>provider</th><th>stato</th><th class="num">latency</th><th>detail</th>';
+  const tr = rows.map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td class="num">' + r[2] + '</td><td>' + r[3] + '</td></tr>').join('');
   return '<table><thead><tr>' + th + '</tr></thead><tbody>' + tr + '</tbody></table>';
 }
 
@@ -146,6 +161,14 @@ function render(o) {
 
   const usageRows = o.provider_usage.map((u) => [esc(u.provider_id), u.total_requests, u.requests_last_5m, usd(u.cost_last_5m_micro_usd), new Date(u.last_seen_at).toLocaleTimeString('it-IT')]);
   $('usage').innerHTML = table(['provider', 'req totali', 'req 5m', 'cost 5m', 'ultima'], usageRows);
+
+  const healthRows = (o.provider_health || []).map((h) => [
+    esc(h.name) + ' <span style="color:var(--muted)">(' + esc(h.type) + ')</span>',
+    '<span class="pill ' + esc(h.status) + '">' + esc(h.status) + '</span>',
+    h.latency_ms + ' ms',
+    h.detail ? esc(h.detail) : '',
+  ]);
+  $('health').innerHTML = healthTable(healthRows);
 
   const provRows = o.providers.map((p) => ['<span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span> ' + esc(p.name) + ' <span style="color:var(--muted)">(' + esc(p.type) + ')</span>', '']);
   $('providers').innerHTML = o.providers.length ? table(['provider', ''], provRows) : '<div class="empty">nessun provider registrato (i mock usano id stringa in usage_ledger)</div>';
