@@ -138,6 +138,20 @@ try {
   assert.ok(String(audio.headers['content-type']).includes('audio/mpeg'), 'content-type audio/mpeg');
   assert.ok(audio.rawPayload.length > 0, 'audio ha byte');
 
+  // 6b. Send a voice message (raw audio body) -> STT -> agent -> 200 with
+  //     transcript + reply + audio_url.
+  const voice = await app.inject({
+    method: 'POST',
+    url: `/api/v1/sessions/${session.id}/audio`,
+    headers: { Authorization: `Bearer ${rawKey}`, 'Content-Type': 'audio/webm' },
+    payload: Buffer.from(new Uint8Array(32000)),
+  });
+  assert.equal(voice.statusCode, 200);
+  const voiceBody = voice.json();
+  assert.ok(voiceBody.transcript && voiceBody.transcript.length > 0, 'transcript non vuoto');
+  assert.ok(voiceBody.reply && voiceBody.reply.length > 0, 'reply non vuoto');
+  assert.ok(voiceBody.audio_url, 'audio_url presente');
+
   // 7. Cost was persisted to the session and the ledger recorded.
   assert.ok(
     pool.queries.some((q) => /UPDATE session SET total_cost_micro_usd/i.test(q.sql)),
@@ -163,7 +177,7 @@ try {
   });
   assert.equal(missing.statusCode, 404);
 
-  console.log('OK — e2e (Fastify HTTP, chatbot flow + trace continuity): 9 checks passed');
+  console.log('OK — e2e (Fastify HTTP, chatbot flow + voice input + trace continuity): 10 checks passed');
 } finally {
   await ctx.close();
 }

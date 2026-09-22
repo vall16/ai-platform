@@ -14,6 +14,15 @@ export function registerSessionRoutes(
   audioStore: AudioStore,
   authGuard: AuthGuard,
 ) {
+  // Raw audio bodies for the voice-input endpoint (STT). The parser hands the
+  // route the raw bytes (Buffer) so they go straight to the STT provider.
+  app.addContentTypeParser(
+    ['audio/webm', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/ogg', 'audio/x-wav', 'application/octet-stream'],
+    (_request, body, done) => {
+      done(null, body);
+    },
+  );
+
   // POST /api/v1/sessions — start a new session
   app.post('/api/v1/sessions', { preHandler: [authGuard] }, async (request, reply) => {
     const { product_type, metadata, language, personality, avatar_id, voice_id, site_url } =
@@ -72,6 +81,44 @@ export function registerSessionRoutes(
       }
       request.log.error({ err }, 'Failed to process message');
       return reply.status(500).send({ error: 'Failed to process message' });
+    }
+  });
+
+  // POST /api/v1/sessions/:id/audio — send a voice message (STT -> agent).
+  // The body is raw audio (content-type is the audio MIME type); the response
+  // mirrors the text message endpoint plus the transcript.
+  app.post('/api/v1/sessions/:id/audio', { preHandler: [authGuard] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const raw = request.body as Buffer | undefined;
+    if (!raw || raw.length === 0) {
+      return reply.status(400).send({ error: 'audio body is required' });
+    }
+    const mimeType = String(request.headers['content-type'] ?? 'audio/webm').split(';')[0].trim();
+
+    try {
+      const result = await agentService.sendAudio(
+        id,
+        request.auth!.tenantId,
+        { bytes: new Uint8Array(raw), mimeType },
+        request.id,
+      );
+      const audioUrl = result.audioId
+        ? `${request.protocol}://${request.host}/api/v1/sessions/${id}/audio/${result.audioId}`
+        : undefined;
+      return reply.send({ reply: result.reply, transcript: result.transcript, audio_url: audioUrl });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'error';
+      if (message === 'session_not_found') {
+        return reply.status(404).send({ error: 'Session not found' });
+      }
+      if (message === 'session_not_active') {
+        return reply.status(409).send({ error: 'Session is not active' });
+      }
+      if (message === 'stt_provider_not_configured') {
+        return reply.status(501).send({ error: 'STT not configured' });
+      }
+      request.log.error({ err }, 'Failed to process audio');
+      return reply.status(500).send({ error: 'Failed to process audio' });
     }
   });
 

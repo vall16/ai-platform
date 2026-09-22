@@ -10,13 +10,14 @@ import type { Pool } from 'pg';
 import type { ProviderContext, TenantId, SessionId } from '@ai-platform/contracts';
 import { CostLedger } from '@ai-platform/cost-ledger';
 import type { AgentDependencies } from '@ai-platform/agent-core';
-import { MockLLMProvider, MockTTSProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
+import { MockLLMProvider, MockTTSProvider, MockSTTProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
 import { ContentBridge, WordPressContentToolProvider } from './wordpress-content.js';
 
 export function createAgentDependencies(pool: Pool): AgentDependencies {
   return {
     llm: new MockLLMProvider(),
     tts: new MockTTSProvider(),
+    stt: new MockSTTProvider(),
     // Live WordPress content when a session carries a site_url, mock otherwise.
     content: new ContentBridge(new WordPressContentToolProvider(), new MockContentToolProvider()),
     ledger: new CostLedger(pool),

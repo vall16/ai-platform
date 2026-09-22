@@ -5,6 +5,7 @@ import type {
   LLMProvider,
   ProviderContext,
   SessionId,
+  STTProvider,
   TenantId,
   TTSProvider,
 } from '@ai-platform/contracts';
@@ -77,6 +78,7 @@ export interface ContentToolProvider {
 export interface AgentDependencies {
   llm: LLMProvider;
   tts?: TTSProvider;
+  stt?: STTProvider;
   avatar?: AvatarProvider;
   content: ContentToolProvider;
   ledger: CostLedger;

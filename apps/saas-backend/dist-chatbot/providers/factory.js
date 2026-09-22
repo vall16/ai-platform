@@ -6,12 +6,13 @@
 // the AgentCore and the routes do not change.
 import { randomUUID } from 'node:crypto';
 import { CostLedger } from '@ai-platform/cost-ledger';
-import { MockLLMProvider, MockTTSProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
+import { MockLLMProvider, MockTTSProvider, MockSTTProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
 import { ContentBridge, WordPressContentToolProvider } from './wordpress-content.js';
 export function createAgentDependencies(pool) {
     return {
         llm: new MockLLMProvider(),
         tts: new MockTTSProvider(),
+        stt: new MockSTTProvider(),
         // Live WordPress content when a session carries a site_url, mock otherwise.
         content: new ContentBridge(new WordPressContentToolProvider(), new MockContentToolProvider()),
         ledger: new CostLedger(pool),

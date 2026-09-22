@@ -68,6 +68,26 @@ export class AgentService {
         }
         return { ...result, audioId };
     }
+    /**
+     * Run one audio message through the agent: STT (transcribe) -> LLM/TTS.
+     * Persists the synthesized audio and folds the STT + turn cost into the
+     * session total. Returns the transcript alongside the usual result.
+     */
+    async sendAudio(sessionId, tenantId, audio, traceId) {
+        await this.ensureSession(sessionId, tenantId);
+        const { transcript, sttCost } = await this.core.transcribe(sessionId, audio, traceId);
+        const result = await this.core.handleMessage(sessionId, transcript, traceId);
+        let audioId;
+        if (result.audio) {
+            const stored = this.audioStore.put(result.audio.bytes, result.audio.mimeType);
+            audioId = stored.id;
+        }
+        const totalCost = sttCost + result.costMicroUsd;
+        if (totalCost > 0) {
+            await this.pool.query(`UPDATE session SET total_cost_micro_usd = total_cost_micro_usd + $1 WHERE id = $2`, [totalCost, sessionId]);
+        }
+        return { ...result, audioId, transcript };
+    }
     /** Stop the agent for a session (clears in-session memory). */
     async close(sessionId) {
         await this.core.closeSession(sessionId);

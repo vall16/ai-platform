@@ -1,6 +1,7 @@
 import type { ChatMessage, LLMResponse, ProviderContext } from '@ai-platform/contracts';
 import type { CostEvent } from '@ai-platform/cost-ledger';
 import type {
+  AgentAudio,
   AgentDependencies,
   AgentSessionState,
   AvatarResult,
@@ -117,6 +118,42 @@ export class AgentCore {
     await this.recordCosts(state, ctx, llmCost, ttsCost);
 
     return { reply, audio, costMicroUsd: llmCost + ttsCost, llmCalls };
+  }
+
+  /**
+   * Transcribe an audio buffer to text (STT). Records the STT cost to the
+   * ledger and returns the transcript plus the cost (so the host can fold it
+   * into the session total). Uses the session's persona language as the hint.
+   */
+  async transcribe(
+    sessionId: string,
+    audio: AgentAudio,
+    traceId?: string,
+  ): Promise<{ transcript: string; sttCost: number }> {
+    const state = this.requireSession(sessionId);
+    if (!this.deps.stt) {
+      throw new Error('stt_provider_not_configured');
+    }
+    const ctx = this.deps.makeContext(state.tenantId, state.sessionId, traceId);
+    const result = await this.deps.stt.transcribe(ctx, {
+      mimeType: audio.mimeType,
+      audio: audio.bytes,
+      language: state.persona.language,
+    });
+    const sttCost = result.cost.costMicroUsd;
+    if (sttCost > 0) {
+      await this.deps.ledger.record({
+        tenantId: state.tenantId,
+        sessionId: state.sessionId,
+        providerId: this.deps.stt.id,
+        resourceType: 'stt',
+        costMicroUsd: sttCost,
+        quantity: 1,
+        unit: 'request',
+        traceId: ctx.traceId,
+      });
+    }
+    return { transcript: result.data.text, sttCost };
   }
 
   /** Create a realtime avatar session for the conversation. */
