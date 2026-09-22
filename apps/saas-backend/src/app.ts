@@ -2,6 +2,7 @@
 
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import type { Pool } from 'pg';
 import type { Config } from './config.js';
 import { continueTrace, buildTraceparent, type TraceContext } from './observability/trace.js';
 import { getPool, closePool } from './db/pool.js';
@@ -25,7 +26,18 @@ export interface AppContext {
   close: () => Promise<void>;
 }
 
-export async function buildApp(config: Config): Promise<{ app: FastifyInstance; ctx: AppContext }> {
+export interface BuildAppOptions {
+  /**
+   * Inject a pool (e.g. a fake in tests). When omitted, getPool(config) is
+   * used and owned (closed on ctx.close()).
+   */
+  pool?: Pool;
+}
+
+export async function buildApp(
+  config: Config,
+  opts: BuildAppOptions = {},
+): Promise<{ app: FastifyInstance; ctx: AppContext }> {
   const metrics = new Metrics();
   const httpRequests = metrics.counter('http_requests_total', 'Total HTTP requests');
   const httpDuration = metrics.histogram(
@@ -75,7 +87,8 @@ export async function buildApp(config: Config): Promise<{ app: FastifyInstance; 
 
   await app.register(cors, { origin: true });
 
-  const pool = getPool(config);
+  const pool = opts.pool ?? getPool(config);
+  const ownsPool = opts.pool === undefined;
   const authGuard = createAuthMiddleware(pool);
 
   // Services.
@@ -112,7 +125,7 @@ export async function buildApp(config: Config): Promise<{ app: FastifyInstance; 
   const ctx: AppContext = {
     close: async () => {
       await app.close();
-      await closePool();
+      if (ownsPool) await closePool();
     },
   };
 
