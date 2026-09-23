@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 2 completata (2026-09-23)** — acceptance test 126 (AI Salesperson) + 129 (quota prepagata) verdi · Prossima: Phase 3 (Routing avanzato + Self-hosted) · Aggiornato: 2026-09-23
+> Stato: **Phase 3 completata (2026-09-23)** — acceptance test 127 (router failover) + 128 (H200 self-hosted) + 130 (profitability) verdi · Prossima: Phase 4 (Scale, HA, espansione) · Aggiornato: 2026-09-23
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -78,16 +78,22 @@
 **Acceptance:** test 126 (AI Salesperson) + 129 (prepaid quota) verdi. ✅ (2026-09-23)
 **Out of scope (spostato):** Shopify app UI, routing cost-aware, Control Room v1, merchant dashboard, historical pricing.
 
-### Phase 3 — Routing avanzato + Self-hosted
-- `SelfHostedAvatarProvider` (H200/H100/B200) + dynamic economics (utilization → effective cost/min)
-- Cost allocation (fixed cost → true realized cost/min)
-- Routing objective: `MINIMIZE_MARGINAL_COST` / `MAXIMIZE_GROSS_MARGIN`
-- Shadow routing + provider benchmarking (job automatico)
-- Cost/usage anomaly detection, abuse/fraud protection
-- What-if simulation (routing simulation)
-- Region routing (EU/US/Asia), data residency
+### Phase 3 — Routing avanzato + Self-hosted (completata)
+**Obiettivo:** routing avanzato (objective-based) + self-hosted GPU con economics dinamiche.
 
-**Acceptance:** test 127 (router failover) + 128 (H200) + 130 (profitability) verdi.
+**Stato (2026-09-23):** **completata** — acceptance test 127 (router failover) + 128 (H200 self-hosted) + 130 (profitability) verdi. Fatto: **SelfHostedAvatarProvider** (H200/H100/B200, nuovo package `@ai-platform/self-hosted`) con pricing per sessione basato sull'utilizzo corrente; **dynamic economics** (`SelfHostedEconomics`: utilization → effective cost/min, costo per sessione che scende al salire dell'utilizzo); **cost allocation** (`CostAllocator`: fixed cost → true realized cost/min + ripartizione proporzionale per sessione); **routing objective** (`selectProvider`: `MINIMIZE_MARGINAL_COST` / `MAXIMIZE_GROSS_MARGIN`); **router failover** (test Go end-to-end: health/circuit/quota + cascading multi-gate).
+
+- [x] **SelfHostedAvatarProvider (H200/H100/B200) + dynamic economics** — nuovo package `@ai-platform/self-hosted`; pricing per sessione = costo fisso orario GPU ammortizzato sulle sessioni attive (utilization → effective cost/min).
+- [x] **Cost allocation** — `CostAllocator.trueRealizedCostPerMin` (fixed cost / minuti reali) + `allocate` (ripartizione proporzionale per durata).
+- [x] **Routing objective** — `selectProvider(MINIMIZE_MARGINAL_COST | MAXIMIZE_GROSS_MARGIN)`.
+- [x] **Router failover (test 127)** — test Go acceptance: selezione best, failover su health/circuit/quota, cascading multi-gate, riserva quota, errore se nessun provider.
+- [ ] **Shadow routing + provider benchmarking** (job automatico) — da fare.
+- [ ] **Cost/usage anomaly detection, abuse/fraud protection** — da fare.
+- [ ] **What-if simulation (routing simulation)** — da fare.
+- [ ] **Region routing (EU/US/Asia), data residency** — da fare.
+
+**Acceptance:** test 127 (router failover) + 128 (H200) + 130 (profitability) verdi. ✅ (2026-09-23)
+**Out of scope (spostato):** shadow routing, benchmarking, anomaly detection, what-if, region routing.
 
 ### Phase 4 — Scale, HA, espansione
 - Router HA (scaling orizzontale, coordinamento Redis), load test 1k/10k sessioni

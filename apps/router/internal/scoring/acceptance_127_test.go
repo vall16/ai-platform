@@ -109,7 +109,7 @@ func TestAcceptance127_RouterFailover(t *testing.T) {
 	})
 
 	t.Run("cascades across two gates to llm-c", func(t *testing.T) {
-		reg, a, b, _ := newFailoverRegistry()
+		reg, a, _, _ := newFailoverRegistry()
 		a.SetHealthy(false) // gate 1: health
 		breakers := resilience.NewManager(resilience.Config{
 			FailureThreshold: 1, Window: time.Minute, OpenDuration: time.Hour,
