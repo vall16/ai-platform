@@ -3,6 +3,11 @@
 export { CostLedger } from './ledger.js';
 export { MarginCalculator } from './margin.js';
 export { QuotaService } from './quota.js';
+export {
+  SelfHostedEconomics,
+  CostAllocator,
+  selectProvider,
+} from './economics.js';
 export type {
   ResourceType,
   CostEvent,
@@ -13,3 +18,10 @@ export type {
   QuotaBalance,
   QuotaEconomics,
 } from './types.js';
+export type {
+  GpuModel,
+  SelfHostedConfig,
+  SelfHostedEconomicsResult,
+  RoutingObjective,
+  ProviderEconomics,
+} from './economics.js';

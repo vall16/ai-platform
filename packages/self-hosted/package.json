@@ -1,0 +1,27 @@
+{
+  "name": "@ai-platform/self-hosted",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted avatar provider (H200/H100/B200) with dynamic utilization-based economics",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-platform/contracts": "*",
+    "@ai-platform/cost-ledger": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}
