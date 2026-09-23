@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { SessionService } from '../services/session.js';
 import type { AgentService } from '../services/agent.js';
 import type { AudioStore } from '../services/audio-store.js';
+import type { QuotaService } from '@ai-platform/cost-ledger';
 
 type AuthGuard = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
@@ -13,6 +14,7 @@ export function registerSessionRoutes(
   agentService: AgentService,
   audioStore: AudioStore,
   authGuard: AuthGuard,
+  quotaService: QuotaService,
 ) {
   // Raw audio bodies for the voice-input endpoint (STT). The parser hands the
   // route the raw bytes (Buffer) so they go straight to the STT provider.
@@ -25,19 +27,48 @@ export function registerSessionRoutes(
 
   // POST /api/v1/sessions — start a new session
   app.post('/api/v1/sessions', { preHandler: [authGuard] }, async (request, reply) => {
-    const { product_type, metadata, language, personality, avatar_id, voice_id, site_url } =
-      request.body as {
-        product_type: 'persona' | 'salesperson';
-        metadata?: Record<string, unknown>;
-        language?: string;
-        personality?: string;
-        avatar_id?: string;
-        voice_id?: string;
-        site_url?: string;
-      };
+    const {
+      product_type,
+      metadata,
+      language,
+      personality,
+      avatar_id,
+      voice_id,
+      site_url,
+      shop_name,
+      shop_url,
+      platform,
+      currency,
+      shop_credentials,
+    } = request.body as {
+      product_type: 'persona' | 'salesperson';
+      metadata?: Record<string, unknown>;
+      language?: string;
+      personality?: string;
+      avatar_id?: string;
+      voice_id?: string;
+      site_url?: string;
+      // Commerce (AI Salesperson) — sent flat by the widget, merged into metadata.
+      shop_name?: string;
+      shop_url?: string;
+      platform?: 'shopify' | 'woocommerce';
+      currency?: string;
+      shop_credentials?: Record<string, string>;
+    };
 
     if (!product_type || !['persona', 'salesperson'].includes(product_type)) {
       return reply.status(400).send({ error: 'product_type must be "persona" or "salesperson"' });
+    }
+
+    // Prepaid quota gate: reject new sessions when the tenant's quota is set
+    // and fully consumed. Tenants with no quota row are unlimited.
+    try {
+      await quotaService.assertAvailable(request.auth!.tenantId);
+    } catch (err) {
+      if (err instanceof Error && err.message === 'quota_exhausted') {
+        return reply.status(402).send({ error: 'quota_exhausted' });
+      }
+      throw err;
     }
 
     // Merge persona/voice fields (sent flat by the widget) into session metadata
@@ -48,6 +79,11 @@ export function registerSessionRoutes(
     if (avatar_id) mergedMetadata.avatar_id = avatar_id;
     if (voice_id) mergedMetadata.voice_id = voice_id;
     if (site_url) mergedMetadata.site_url = site_url;
+    if (shop_name) mergedMetadata.shop_name = shop_name;
+    if (shop_url) mergedMetadata.shop_url = shop_url;
+    if (platform) mergedMetadata.platform = platform;
+    if (currency) mergedMetadata.currency = currency;
+    if (shop_credentials) mergedMetadata.shop_credentials = shop_credentials;
 
     const session = await sessionService.create(request.auth!.tenantId, product_type, mergedMetadata);
     // The widget reads `session_id`; the DB row uses `id`. Expose both.

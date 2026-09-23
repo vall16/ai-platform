@@ -8,6 +8,8 @@ export interface Config {
   stripeWebhookSecret: string;
   apiKeyPrefix: string;
   sessionPriceMicroUsd: number;
+  /** Amortized fixed overhead (micro USD) folded into the quota accounting cost. */
+  quotaFixedCostMicroUsd: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -21,5 +23,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Flat per-session price (micro USD) stamped onto each session at creation.
     // Phase 1 revenue model; real per-product pricing lands in Phase 2/4.
     sessionPriceMicroUsd: parseInt(env.SESSION_PRICE_MICRO_USD ?? '100000', 10),
+    // Amortized fixed overhead (micro USD) for the quota accounting cost basis.
+    quotaFixedCostMicroUsd: parseInt(env.QUOTA_FIXED_COST_MICRO_USD ?? '0', 10),
   };
 }

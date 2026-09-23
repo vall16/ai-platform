@@ -14,7 +14,7 @@ import type {
   Capabilities,
 } from '@ai-platform/contracts';
 
-const MOCK_PRODUCTS: Product[] = [
+export const MOCK_PRODUCTS: Product[] = [
   {
     id: 'prod-001',
     title: 'Wireless Headphones Pro',

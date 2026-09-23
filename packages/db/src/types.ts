@@ -59,6 +59,12 @@ export interface Session {
   ended_at: string | null;
   total_cost_micro_usd: number;
   revenue_micro_usd: number;
+  /** Commerce attribution (salesperson): add-to-cart actions the agent performed. */
+  cart_additions: number;
+  /** Commerce attribution (salesperson): checkouts the agent started. */
+  orders_influenced: number;
+  /** Commerce attribution (salesperson): cart value (micro USD) at each checkout. */
+  revenue_influenced: number;
   metadata: Record<string, unknown>;
   created_at: string;
 }

@@ -10,6 +10,8 @@ import type {
 import { SessionMemory } from './memory.js';
 import { buildSystemPrompt } from './prompt.js';
 import { CONTENT_TOOLS, executeContentTool } from './tools.js';
+import { COMMERCE_TOOLS, executeCommerceTool } from './commerce-tools.js';
+import type { ShopContext } from './types.js';
 
 /** Maximum LLM→tool round-trips per message (guards against loops). */
 const MAX_TOOL_ROUNDS = 4;
@@ -70,8 +72,28 @@ export class AgentCore {
     let llmCalls = 0;
     let response: LLMResponse | undefined;
 
+    // Commerce attribution (salesperson): tracked across the tool loop so the
+    // host can persist cart_additions / orders_influenced / revenue_influenced.
+    let cartAdditions = 0;
+    let ordersInfluenced = 0;
+    let revenueInfluencedMicroUsd = 0;
+
+    // Salesperson sessions advertise commerce tools; persona sessions advertise
+    // site-content tools. The commerce bridge is addressed per session via a
+    // ShopContext derived from the persona (multi-tenant).
+    const isSalesperson = state.persona.productType === 'salesperson';
+    const tools = isSalesperson ? COMMERCE_TOOLS : CONTENT_TOOLS;
+    const shop: ShopContext | undefined = isSalesperson
+      ? {
+          shopUrl: state.persona.shopUrl,
+          platform: state.persona.platform,
+          currency: state.persona.currency,
+          credentials: state.persona.shopCredentials,
+        }
+      : undefined;
+
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const result = await this.deps.llm.complete(ctx, { messages, tools: CONTENT_TOOLS });
+      const result = await this.deps.llm.complete(ctx, { messages, tools });
       llmCost += result.cost.costMicroUsd;
       llmCalls++;
       response = result.data;
@@ -81,11 +103,30 @@ export class AgentCore {
 
       messages.push({ role: 'assistant', content: response.content });
       for (const call of toolCalls) {
-        const toolResult = await executeContentTool(
-          this.deps.content,
-          call,
-          state.persona.siteUrl,
-        );
+        let toolResult: string;
+        if (isSalesperson) {
+          toolResult = this.deps.commerce
+            ? await executeCommerceTool(this.deps.commerce, call, state.sessionId, shop)
+            : JSON.stringify({ error: 'commerce_provider_not_configured' });
+          // Attribute the agent's commercial actions to the session.
+          if (this.deps.commerce) {
+            if (call.name === 'add_to_cart') {
+              const cart = JSON.parse(toolResult) as { items?: unknown[] };
+              if (Array.isArray(cart.items)) cartAdditions += 1;
+            } else if (call.name === 'start_checkout') {
+              const checkout = JSON.parse(toolResult) as { checkoutUrl?: string };
+              if (checkout.checkoutUrl) {
+                ordersInfluenced += 1;
+                // The cart is still populated after checkout; read its value to
+                // attribute the revenue the agent influenced.
+                const cart = await this.deps.commerce.getCart(state.sessionId, shop);
+                revenueInfluencedMicroUsd += cart.totalMicroUsd;
+              }
+            }
+          }
+        } else {
+          toolResult = await executeContentTool(this.deps.content, call, state.persona.siteUrl);
+        }
         messages.push({
           role: 'tool',
           content: toolResult,
@@ -117,7 +158,11 @@ export class AgentCore {
 
     await this.recordCosts(state, ctx, llmCost, ttsCost);
 
-    return { reply, audio, costMicroUsd: llmCost + ttsCost, llmCalls };
+    const commerce = isSalesperson
+      ? { cartAdditions, ordersInfluenced, revenueInfluencedMicroUsd }
+      : undefined;
+
+    return { reply, audio, costMicroUsd: llmCost + ttsCost, llmCalls, commerce };
   }
 
   /**

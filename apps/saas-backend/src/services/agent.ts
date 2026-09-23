@@ -8,6 +8,7 @@ import type { Pool } from 'pg';
 import type { Session, ProductType } from '@ai-platform/db';
 import { AgentCore } from '@ai-platform/agent-core';
 import type { AgentPersona, AgentSessionState, MessageResult } from '@ai-platform/agent-core';
+import type { QuotaService } from '@ai-platform/cost-ledger';
 import type { AudioStore } from './audio-store.js';
 
 export interface AgentMessageResult extends MessageResult {
@@ -25,6 +26,8 @@ export class AgentService {
     private readonly core: AgentCore,
     private readonly pool: Pool,
     private readonly audioStore: AudioStore,
+    /** Prepaid quota: marginal cost of each turn is consumed from it. */
+    private readonly quotaService?: QuotaService,
   ) {}
 
   /**
@@ -73,6 +76,17 @@ export class AgentService {
       siteName: typeof meta.site_name === 'string' ? meta.site_name : undefined,
       siteDescription: typeof meta.site_description === 'string' ? meta.site_description : undefined,
       siteUrl: typeof meta.site_url === 'string' ? meta.site_url : undefined,
+      // Commerce (AI Salesperson): product type + shop config drive the live
+      // commerce bridge (Shopify / WooCommerce) vs the mock catalog.
+      productType,
+      shopName: typeof meta.shop_name === 'string' ? meta.shop_name : undefined,
+      shopUrl: typeof meta.shop_url === 'string' ? meta.shop_url : undefined,
+      platform: meta.platform === 'shopify' || meta.platform === 'woocommerce' ? meta.platform : undefined,
+      currency: typeof meta.currency === 'string' ? meta.currency : undefined,
+      shopCredentials:
+        meta.shop_credentials && typeof meta.shop_credentials === 'object'
+          ? (meta.shop_credentials as Record<string, string>)
+          : undefined,
     };
   }
 
@@ -96,6 +110,21 @@ export class AgentService {
       await this.pool.query(
         `UPDATE session SET total_cost_micro_usd = total_cost_micro_usd + $1 WHERE id = $2`,
         [result.costMicroUsd, sessionId],
+      );
+      await this.quotaService?.consume(tenantId, result.costMicroUsd);
+    }
+
+    // Persist commerce attribution (salesperson): the agent's cart/checkout
+    // actions, so the Control Room can report influenced revenue per session.
+    const c = result.commerce;
+    if (c && (c.cartAdditions > 0 || c.ordersInfluenced > 0 || c.revenueInfluencedMicroUsd > 0)) {
+      await this.pool.query(
+        `UPDATE session
+         SET cart_additions = cart_additions + $1,
+             orders_influenced = orders_influenced + $2,
+             revenue_influenced = revenue_influenced + $3
+         WHERE id = $4`,
+        [c.cartAdditions, c.ordersInfluenced, c.revenueInfluencedMicroUsd, sessionId],
       );
     }
 
@@ -129,6 +158,7 @@ export class AgentService {
         `UPDATE session SET total_cost_micro_usd = total_cost_micro_usd + $1 WHERE id = $2`,
         [totalCost, sessionId],
       );
+      await this.quotaService?.consume(tenantId, totalCost);
     }
 
     return { ...result, audioId, transcript };

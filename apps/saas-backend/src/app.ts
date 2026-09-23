@@ -15,6 +15,7 @@ import { AgentService } from './services/agent.js';
 import { AudioStore } from './services/audio-store.js';
 import { createAgentDependencies } from './providers/factory.js';
 import { AgentCore } from '@ai-platform/agent-core';
+import { QuotaService } from '@ai-platform/cost-ledger';
 import { registerTenantRoutes } from './routes/tenants.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerBillingRoutes } from './routes/billing.js';
@@ -97,6 +98,7 @@ export async function buildApp(
   const apiKeyService = new ApiKeyService(pool, config.apiKeyPrefix);
   const sessionService = new SessionService(pool, config.sessionPriceMicroUsd);
   const billingService = new BillingService(pool, config.stripeSecretKey);
+  const quotaService = new QuotaService(pool, config.quotaFixedCostMicroUsd);
 
   // Agent (chatbot) wiring — mock-first providers, real cost ledger.
   const agentDeps = createAgentDependencies(pool);
@@ -114,7 +116,7 @@ export async function buildApp(
 
   const agentCore = new AgentCore(agentDeps);
   const audioStore = new AudioStore();
-  const agentService = new AgentService(agentCore, pool, audioStore);
+  const agentService = new AgentService(agentCore, pool, audioStore, quotaService);
 
   // Health check (no auth).
   app.get('/api/v1/health', async (_request, reply) => {
@@ -131,8 +133,8 @@ export async function buildApp(
 
   // Routes.
   registerTenantRoutes(app, tenantService, apiKeyService, authGuard);
-  registerSessionRoutes(app, sessionService, agentService, audioStore, authGuard);
-  registerBillingRoutes(app, billingService, authGuard);
+  registerSessionRoutes(app, sessionService, agentService, audioStore, authGuard, quotaService);
+  registerBillingRoutes(app, billingService, authGuard, quotaService);
   registerControlRoomRoutes(app, controlRoomService, authGuard);
 
   const ctx: AppContext = {

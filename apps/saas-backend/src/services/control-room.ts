@@ -48,6 +48,12 @@ export interface ControlRoomOverview {
     gross_margin_pct: number | null;
     note: string;
   };
+  /** Commerce attribution (salesperson): the agent's commercial impact. */
+  commerce: {
+    cart_additions: number;
+    orders_influenced: number;
+    revenue_influenced_micro_usd: number;
+  };
   providers: Array<{ id: string; name: string; type: string; status: string }>;
   provider_usage: Array<{
     provider_id: string;
@@ -66,7 +72,7 @@ export class ControlRoomService {
   ) {}
 
   async overview(): Promise<ControlRoomOverview> {
-    const [statusRows, productRows, revenueRow, costRow, resourceRows, providerRows, usageRows, providerHealth] =
+    const [statusRows, productRows, revenueRow, commerceRow, costRow, resourceRows, providerRows, usageRows, providerHealth] =
       await Promise.all([
         this.pool.query(`SELECT status, COUNT(*)::int AS n FROM session GROUP BY status`),
         this.pool.query(`SELECT product_type, COUNT(*)::int AS n FROM session GROUP BY product_type`),
@@ -74,6 +80,13 @@ export class ControlRoomService {
           `SELECT
              COALESCE(SUM(revenue_micro_usd) FILTER (WHERE started_at >= date_trunc('day', now())), 0)::bigint AS today,
              COALESCE(SUM(revenue_micro_usd), 0)::bigint AS total
+           FROM session`,
+        ),
+        this.pool.query(
+          `SELECT
+             COALESCE(SUM(cart_additions), 0)::int AS cart_additions,
+             COALESCE(SUM(orders_influenced), 0)::int AS orders_influenced,
+             COALESCE(SUM(revenue_influenced), 0)::bigint AS revenue_influenced
            FROM session`,
         ),
         this.pool.query(
@@ -154,6 +167,11 @@ export class ControlRoomService {
         gross_margin_micro_usd: grossMargin,
         gross_margin_pct: grossMarginPct,
         note: 'Flat per-session price (SESSION_PRICE_MICRO_USD) vs. usage_ledger cost. margin = (revenue - cost) / revenue.',
+      },
+      commerce: {
+        cart_additions: Number(commerceRow.rows[0].cart_additions),
+        orders_influenced: Number(commerceRow.rows[0].orders_influenced),
+        revenue_influenced_micro_usd: Number(commerceRow.rows[0].revenue_influenced),
       },
       providers,
       provider_usage,

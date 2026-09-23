@@ -10,7 +10,14 @@ import type { Pool } from 'pg';
 import type { ProviderContext, TenantId, SessionId } from '@ai-platform/contracts';
 import { CostLedger } from '@ai-platform/cost-ledger';
 import type { AgentDependencies } from '@ai-platform/agent-core';
-import { MockLLMProvider, MockTTSProvider, MockSTTProvider, MockContentToolProvider } from '@ai-platform/mock-providers';
+import {
+  MockLLMProvider,
+  MockTTSProvider,
+  MockSTTProvider,
+  MockContentToolProvider,
+  MockCommerceToolProvider,
+} from '@ai-platform/mock-providers';
+import { CommerceBridge, ShopifyAdapter, WooCommerceAdapter } from '@ai-platform/commerce-core';
 import { ContentBridge, WordPressContentToolProvider } from './wordpress-content.js';
 
 export function createAgentDependencies(pool: Pool): AgentDependencies {
@@ -20,6 +27,13 @@ export function createAgentDependencies(pool: Pool): AgentDependencies {
     stt: new MockSTTProvider(),
     // Live WordPress content when a session carries a site_url, mock otherwise.
     content: new ContentBridge(new WordPressContentToolProvider(), new MockContentToolProvider()),
+    // Live commerce (Shopify / WooCommerce) when a session carries a shop config,
+    // mock catalog otherwise.
+    commerce: new CommerceBridge(
+      new ShopifyAdapter(),
+      new WooCommerceAdapter(),
+      new MockCommerceToolProvider(),
+    ),
     ledger: new CostLedger(pool),
     makeContext: (tenantId: TenantId, sessionId: SessionId, traceId?: string): ProviderContext => {
       // Reuse the host request id when provided so logs, the X-Trace-Id header

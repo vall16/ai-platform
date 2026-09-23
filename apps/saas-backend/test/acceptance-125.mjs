@@ -54,6 +54,7 @@ function makeFakePool() {
       if (/GROUP BY status/i.test(sql)) return { rows: [{ status: 'active', n: 1 }] };
       if (/GROUP BY product_type/i.test(sql)) return { rows: [{ product_type: 'persona', n: 1 }] };
       if (/SUM\(revenue_micro_usd\)/i.test(sql)) return { rows: [{ today: 100000, total: 100000 }] };
+      if (/SUM\(cart_additions\)/i.test(sql)) return { rows: [{ cart_additions: 0, orders_influenced: 0, revenue_influenced: 0 }] };
       if (/last_1m/i.test(sql)) return { rows: [{ last_1m: 0, last_5m: 0, today: 30000, total: 30000 }] };
       if (/GROUP BY resource_type/i.test(sql)) return { rows: [{ resource_type: 'llm', cost: 30000 }] };
       if (/FROM provider/i.test(sql)) return { rows: [] };

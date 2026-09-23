@@ -1,0 +1,27 @@
+{
+  "name": "@ai-platform/commerce-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Commerce Core — live commerce adapters (Shopify, WooCommerce) and the multi-tenant commerce bridge for the AI Salesperson",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-platform/contracts": "*",
+    "@ai-platform/agent-core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}

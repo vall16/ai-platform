@@ -57,3 +57,37 @@ export interface MarginReport {
   grossMarginPct: number;
   byResource?: ResourceCost[];
 }
+
+/** Prepaid quota balance for a tenant. */
+export interface QuotaBalance {
+  tenantId: string;
+  /** Prepaid quota (budget) for the period, in micro USD. */
+  totalMicroUsd: number;
+  /** Marginal (provider) cost consumed from the quota, in micro USD. */
+  usedMicroUsd: number;
+  /** Remaining quota (total - used, floored at 0), in micro USD. */
+  remainingMicroUsd: number;
+  /** True when no quota remains (new sessions are rejected). */
+  exhausted: boolean;
+  /** When the quota period ends (ISO 8601), if set. */
+  periodEnd: string | null;
+}
+
+/**
+ * Economics of a prepaid quota. Distinguishes marginal cost (variable provider
+ * cost — what the router minimizes) from accounting cost (fully-loaded, incl.
+ * amortized fixed overhead) and reports the gross margin on the prepaid
+ * revenue under both bases.
+ */
+export interface QuotaEconomics extends QuotaBalance {
+  /** Variable provider cost consumed (COGS). */
+  marginalCostMicroUsd: number;
+  /** Fully-loaded cost: marginal + amortized fixed overhead. */
+  accountingCostMicroUsd: number;
+  /** Revenue (prepaid quota) - marginal cost. */
+  marginalGrossMarginMicroUsd: number;
+  marginalGrossMarginPct: number | null;
+  /** Revenue (prepaid quota) - accounting cost. */
+  accountingGrossMarginMicroUsd: number;
+  accountingGrossMarginPct: number | null;
+}

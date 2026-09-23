@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 1 — MVP: AI Persona su WordPress** · Aggiornato: 2026-09-22
+> Stato: **Phase 2 completata (2026-09-23)** — acceptance test 126 (AI Salesperson) + 129 (quota prepagata) verdi · Prossima: Phase 3 (Routing avanzato + Self-hosted) · Aggiornato: 2026-09-23
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -32,7 +32,7 @@
 ### Phase 1 — MVP: AI Persona su WordPress (completata)
 **Obiettivo:** un flusso end-to-end reale, un solo prodotto, 1–2 provider.
 
-**Stato (2026-09-22):** **completata** — acceptance test 125 verde (11 check end-to-end), provider health nel Control Room; l'unico item aperto è l'avatar, de-scoped e opzionale. In corso, **de-scoped su chatbot** — pipeline conversazione + TTS senza avatar realtime (l'avatar resta opzionale nel design di AgentCore). Fatto: Agent Core (conversazione, memoria in-sessione, tool `search_posts`/`get_post`, prompting) con mock LLM e test unitari; SaaS backend session manager + endpoint `POST /sessions/:id/messages`, `POST /sessions/:id/audio` (input vocale: STT→LLM→TTS, costo STT a ledger) e `GET /sessions/:id/audio/:audioId`; Cost Ledger per-session (llm/tts/stt) + **revenue per sessione e gross margin** (prezzo fisso `SESSION_PRICE_MICRO_USD` su `session.revenue_micro_usd`, aggregato nel Control Room); **Control Room v0** (API overview + dashboard self-contained, card margin reale); **billing Stripe** (subscribe/cancel/webhook); **observability** (registry Prometheus self-contained, endpoint `/metrics`); **content tool bridge** (provider WordPress REST con `site_url` per sessione + fallback mock); plugin WordPress (API base configurabile, validazione chiave reale, CORS, error handling); **router Go** (compila + `go vet` + test; scoring cost/latency/reliability + health check, **quota-aware routing, circuit breaker e failover**, verificato end-to-end con mock provider via HTTP); **observability** (OTel `trace_id` end-to-end: W3C `traceparent` continuato/emesso da router Go e backend, header `X-Trace-Id`, log strutturati JSON con `trace_id` nel router, helper W3C + test unitari in entrambi i linguaggi); **e2e completo** (test end-to-end del flusso chatbot attraverso il layer HTTP Fastify reale via `app.inject()` con pool fake: auth, ciclo di vita sessione, messaggio con `traceparent` W3C che verifica la continuità di trace, audio, persistenza costo/ledger, errori 401/404).
+**Stato (2026-09-22):** **completata** — acceptance test 125 verde (11 check end-to-end), provider health nel Control Room; l'unico item aperto è l'avatar, de-scoped e opzionale. De-scoped su chatbot — pipeline conversazione + TTS senza avatar realtime (l'avatar resta opzionale nel design di AgentCore). Fatto: Agent Core (conversazione, memoria in-sessione, tool `search_posts`/`get_post`, prompting) con mock LLM e test unitari; SaaS backend session manager + endpoint `POST /sessions/:id/messages`, `POST /sessions/:id/audio` (input vocale: STT→LLM→TTS, costo STT a ledger) e `GET /sessions/:id/audio/:audioId`; Cost Ledger per-session (llm/tts/stt) + **revenue per sessione e gross margin** (prezzo fisso `SESSION_PRICE_MICRO_USD` su `session.revenue_micro_usd`, aggregato nel Control Room); **Control Room v0** (API overview + dashboard self-contained, card margin reale); **billing Stripe** (subscribe/cancel/webhook); **observability** (registry Prometheus self-contained, endpoint `/metrics`); **content tool bridge** (provider WordPress REST con `site_url` per sessione + fallback mock); plugin WordPress (API base configurabile, validazione chiave reale, CORS, error handling); **router Go** (compila + `go vet` + test; scoring cost/latency/reliability + health check, **quota-aware routing, circuit breaker e failover**, verificato end-to-end con mock provider via HTTP); **observability** (OTel `trace_id` end-to-end: W3C `traceparent` continuato/emesso da router Go e backend, header `X-Trace-Id`, log strutturati JSON con `trace_id` nel router, helper W3C + test unitari in entrambi i linguaggi); **e2e completo** (test end-to-end del flusso chatbot attraverso il layer HTTP Fastify reale via `app.inject()` con pool fake: auth, ciclo di vita sessione, messaggio con `traceparent` W3C che verifica la continuità di trace, audio, persistenza costo/ledger, errori 401/404).
 
 - SaaS backend: tenant, auth, billing (Stripe), session manager
 - Agent Core: conversazione, memoria in-sessione, tool invocation (`search_posts`, `get_post`, …), prompting
@@ -53,7 +53,11 @@
 **Acceptance:** test 125 (AI Persona) verde. ✅ (2026-09-22)
 **Out of scope:** H200, shadow routing, benchmarking, what-if, AI Salesperson.
 
-### Phase 2 — AI Salesperson + Cost Ledger completo
+### Phase 2 — AI Salesperson + Cost Ledger completo (completata)
+**Obiettivo:** secondo prodotto (AI Salesperson su Shopify/WooCommerce) + Cost Ledger completo (quota prepagata, economics marginal vs accounting).
+
+**Stato (2026-09-23):** **completata** — acceptance test 126 (AI Salesperson) + 129 (quota prepagata) verdi. Fatto: **Commerce Core** (`ShopifyAdapter` GraphQL Admin API + `WooCommerceAdapter` REST + `CommerceBridge` live/mock); **commerce tools** in AgentCore (`search_products`, `get_product`, `add_to_cart`, `start_checkout`) con loop tool per sessioni salesperson; **MockCommerceToolProvider** (catalogo + carrello in-memory) per sviluppo offline; **backend** (factory commerce, session creation con campi shop persistiti in metadata, `AgentService` che persiste l'attribution e consuma la quota); **revenue attribution** (colonne `cart_additions`/`orders_influenced`/`revenue_influenced` su `session`, tracking in AgentCore, persistenza in AgentService, aggregazione nel Control Room); **Cost Ledger completo** (schema `tenant_quota`, `QuotaService` con setQuota/getBalance/assertAvailable/consume/getEconomics, config `QUOTA_FIXED_COST_MICRO_USD`, wiring nel backend, route billing `POST/GET /api/v1/billing/quota`); **quota prepagata** (gate 402 `quota_exhausted` alla creazione, consumo del costo marginale per messaggio, economics marginal vs accounting cost + gross margin).
+
 - Commerce Core + `ShopifyAdapter` + `WooCommerceAdapter`
 - Shopify app (theme extension + app embed block) + plugin WooCommerce
 - Commerce tools (`search_products`, `add_to_cart`, `start_checkout`, …)
@@ -63,7 +67,16 @@
 - Control Room v1: provider monitor, routing chart, cost/margin monitor, alerting
 - Merchant dashboard: analytics per prodotto
 
-**Acceptance:** test 126 (AI Salesperson) + 129 (prepaid quota) verdi.
+**Da fare (Phase 2):**
+- [x] **Commerce Core + adapter** — `ShopifyAdapter` (GraphQL Admin API) + `WooCommerceAdapter` (REST) + `CommerceBridge` (live se la sessione porta `shop_url`, mock altrimenti); spec API documentate.
+- [x] **Commerce tools** — `search_products`, `get_product`, `add_to_cart`, `start_checkout` in AgentCore; loop tool per sessioni salesperson; `MockCommerceToolProvider` offline.
+- [x] **Revenue attribution** — colonne `cart_additions`/`orders_influenced`/`revenue_influenced` su `session`; tracking in AgentCore, persistenza in AgentService, aggregazione nel Control Room.
+- [x] **Cost Ledger completo: quota prepagata** — schema `tenant_quota`, `QuotaService` (setQuota/getBalance/assertAvailable/consume/getEconomics), config `QUOTA_FIXED_COST_MICRO_USD`, gate 402 `quota_exhausted`, consumo del costo marginale per messaggio, economics marginal vs accounting cost + gross margin; route billing `POST/GET /api/v1/billing/quota`.
+- [ ] **Shopify app + plugin WooCommerce** — theme extension, app embed block, installer (da fare).
+- [ ] **Routing cost-aware + Control Room v1 + merchant dashboard** — policy per piano, capacity routing, `EstimatedSessionCost`, routing chart, alerting, analytics per prodotto, historical pricing (da fare).
+
+**Acceptance:** test 126 (AI Salesperson) + 129 (prepaid quota) verdi. ✅ (2026-09-23)
+**Out of scope (spostato):** Shopify app UI, routing cost-aware, Control Room v1, merchant dashboard, historical pricing.
 
 ### Phase 3 — Routing avanzato + Self-hosted
 - `SelfHostedAvatarProvider` (H200/H100/B200) + dynamic economics (utilization → effective cost/min)
