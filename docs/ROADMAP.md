@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 3 completata (2026-09-23)** — acceptance test 127 (router failover) + 128 (H200 self-hosted) + 130 (profitability) verdi · Prossima: Phase 4 (Scale, HA, espansione) · Aggiornato: 2026-09-23
+> Stato: **Phase 4 in corso (2026-09-24)** — graceful degradation (test 131) + pricing avanzato (test 132) verdi · Prossime: Router HA/Redis, GDPR, SDK connectors, K8s · Aggiornato: 2026-09-24
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -95,13 +95,20 @@
 **Acceptance:** test 127 (router failover) + 128 (H200) + 130 (profitability) verdi. ✅ (2026-09-23)
 **Out of scope (spostato):** shadow routing, benchmarking, anomaly detection, what-if, region routing.
 
-### Phase 4 — Scale, HA, espansione
-- Router HA (scaling orizzontale, coordinamento Redis), load test 1k/10k sessioni
-- Graceful degradation completa (cascata fallback)
-- GDPR completo (export, deletion, retention), Shopify privacy webhooks
-- SDK per future connectors (Webflow, Wix, Squarespace, custom, mobile)
-- Pricing avanzato: revenue-based, hybrid, tiered, volume discounts
-- Deployment Kubernetes
+### Phase 4 — Scale, HA, espansione (in corso)
+**Obiettivo:** scalabilità e alta disponibilità, pricing avanzato, conformità GDPR, SDK per connector futuri, deployment.
+
+**Stato (2026-09-24):** **in corso** — acceptance test 131 (graceful degradation) + 132 (pricing avanzato) verdi. Fatto: **graceful degradation completa** (router: `mode` full/degraded/best_effort + `degradation_level` + best-effort fallback come safety net quando tutti i provider primari sono giù); **pricing avanzato** (cost-ledger: `PricingEngine` con modelli flat / per-unit / revenue-based / hybrid / tiered + volume discount).
+
+- [x] **Graceful degradation completa (cascata fallback)** — router Go: il risultato di routing espone `mode` (`full`/`degraded`/`best_effort`) e `degradation_level` (profondità della cascata); `SetBestEffort` designa un safety net selezionato (con quota riservata) quando nessun provider primario è eleggibile, invece di fallire. Test 131 (8 subtest).
+- [x] **Pricing avanzato** — cost-ledger `PricingEngine`: modelli `flat`, `per_unit`, `revenue_based` (% di revenue), `hybrid` (base + per-unit + revenue share), `tiered` (fasce volumetriche) + `volumeDiscount` (sconto sulla parte variabile, mai sulla base fissa). Test 132.
+- [ ] **Router HA (scaling orizzontale, coordinamento Redis), load test 1k/10k sessioni** — da fare.
+- [ ] **GDPR completo (export, deletion, retention), Shopify privacy webhooks** — da fare.
+- [ ] **SDK per future connectors (Webflow, Wix, Squarespace, custom, mobile)** — da fare.
+- [ ] **Deployment Kubernetes** — da fare.
+
+**Acceptance (parziale):** test 131 (graceful degradation) + 132 (pricing avanzato) verdi. ✅ (2026-09-24)
+**Out of scope (spostato):** Router HA/Redis, load test, GDPR, SDK connectors, K8s.
 
 ## 3. Workstream (paralleli)
 

@@ -33,6 +33,20 @@ type Candidate struct {
 	SkipReason string  `json:"skip_reason,omitempty"` // "unhealthy", "circuit_open", "over_quota"
 }
 
+// Mode describes the quality tier of the selected provider, expressing how far
+// the routing decision degraded from the ideal (top-scored) provider.
+type Mode string
+
+const (
+	// ModeFull: the top-scored provider was selected (no degradation).
+	ModeFull Mode = "full"
+	// ModeDegraded: a fallback within the normal cascade was selected.
+	ModeDegraded Mode = "degraded"
+	// ModeBestEffort: no primary provider was eligible, so the designated
+	// best-effort safety net was selected to keep serving (degraded response).
+	ModeBestEffort Mode = "best_effort"
+)
+
 // Result is the output of a routing decision.
 type Result struct {
 	SelectedProviderID string      `json:"selected_provider_id"`
@@ -40,16 +54,19 @@ type Result struct {
 	Candidates         []Candidate `json:"candidates"`
 	Reason             string      `json:"reason"`
 	Failover           bool        `json:"failover"`
+	Mode               Mode        `json:"mode"`
+	DegradationLevel   int         `json:"degradation_level"`
 }
 
 // Engine scores providers and selects the best available one for a given
 // resource type, applying health, circuit-breaker and quota gates and failing
 // over to the next-best candidate when the top one is unavailable.
 type Engine struct {
-	registry *provider.Registry
-	weights  Weights
-	breakers *resilience.Manager
-	tracker  *quota.Tracker
+	registry   *provider.Registry
+	weights    Weights
+	breakers   *resilience.Manager
+	tracker    *quota.Tracker
+	bestEffort provider.Provider
 }
 
 // NewEngine creates a scoring engine with the given registry, circuit-breaker
@@ -66,6 +83,12 @@ func NewEngine(reg *provider.Registry, breakers *resilience.Manager, tracker *qu
 
 // SetWeights overrides the scoring weights.
 func (e *Engine) SetWeights(w Weights) { e.weights = w }
+
+// SetBestEffort designates a last-resort provider used for graceful
+// degradation: when no primary provider is eligible (all unhealthy,
+// circuit-open or over quota), the engine falls back to this provider — if it
+// is itself healthy — and serves a degraded response instead of failing.
+func (e *Engine) SetBestEffort(p provider.Provider) { e.bestEffort = p }
 
 // RecordOutcome feeds a call outcome back into the circuit breaker for a
 // provider, driving its open/half-open/closed transitions.
@@ -146,24 +169,57 @@ func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) 
 		return evals[i].cand.Score > evals[j].cand.Score
 	})
 
+	// trySelect reserves a quota slot for the candidate. On failure it marks
+	// the candidate over-quota and returns false so the caller can fall through.
+	trySelect := func(ev *eval) bool {
+		if e.tracker != nil {
+			caps, _ := ev.provider.Capabilities()
+			limit := caps.MaxConcurrentSessions
+			if limit > 0 && !e.tracker.TryAcquire(ev.provider.ID(), limit) {
+				// Lost a race for the last slot; fall through to the next candidate.
+				ev.cand.Eligible = false
+				ev.cand.SkipReason = "over_quota"
+				return false
+			}
+		}
+		return true
+	}
+
 	// Failover: reserve the first eligible candidate's quota slot.
 	var selected *eval
+	var selectedIdx int
+	isBestEffort := false
 	for i := range evals {
 		if !evals[i].cand.Eligible {
 			continue
 		}
-		if e.tracker != nil {
-			caps, _ := evals[i].provider.Capabilities()
-			limit := caps.MaxConcurrentSessions
-			if limit > 0 && !e.tracker.TryAcquire(evals[i].provider.ID(), limit) {
-				// Lost a race for the last slot; fall through to the next candidate.
-				evals[i].cand.Eligible = false
-				evals[i].cand.SkipReason = "over_quota"
-				continue
+		if trySelect(&evals[i]) {
+			selected = &evals[i]
+			selectedIdx = i
+			break
+		}
+	}
+
+	// Graceful degradation: if no primary provider is eligible, fall back to
+	// the designated best-effort provider (if healthy) instead of failing.
+	if selected == nil && e.bestEffort != nil {
+		if health, err := e.bestEffort.Health(ctx); err == nil && health.Status != "unhealthy" {
+			be := eval{
+				provider: e.bestEffort,
+				cand: Candidate{
+					ProviderID: e.bestEffort.ID(),
+					Name:       e.bestEffort.Name(),
+					Score:      round4(e.scoreProvider(e.bestEffort)),
+					Eligible:   true,
+				},
+			}
+			if trySelect(&be) {
+				evals = append(evals, be)
+				selected = &evals[len(evals)-1]
+				selectedIdx = len(evals) - 1
+				isBestEffort = true
 			}
 		}
-		selected = &evals[i]
-		break
 	}
 
 	if selected == nil {
@@ -171,18 +227,29 @@ func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) 
 	}
 
 	resultCandidates := make([]Candidate, 0, len(evals))
-	failover := false
 	for i := range evals {
 		resultCandidates = append(resultCandidates, evals[i].cand)
-		if evals[i].cand.ProviderID == selected.cand.ProviderID && i > 0 {
-			failover = true
-		}
 	}
+
+	mode := ModeFull
+	degradationLevel := 0
+	switch {
+	case isBestEffort:
+		mode = ModeBestEffort
+		degradationLevel = selectedIdx
+	case selectedIdx > 0:
+		mode = ModeDegraded
+		degradationLevel = selectedIdx
+	}
+	failover := mode != ModeFull
 
 	reason := fmt.Sprintf("highest eligible score (weights cost=%.2f, latency=%.2f, reliability=%.2f)",
 		e.weights.Cost, e.weights.Latency, e.weights.Reliability)
-	if failover {
-		reason = "failover: top candidate unavailable, selected next eligible provider"
+	switch mode {
+	case ModeDegraded:
+		reason = fmt.Sprintf("graceful degradation: top candidate unavailable, selected fallback at level %d", degradationLevel)
+	case ModeBestEffort:
+		reason = "graceful degradation: no primary provider available, using best-effort fallback"
 	}
 
 	return &Result{
@@ -191,6 +258,8 @@ func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) 
 		Candidates:         resultCandidates,
 		Reason:             reason,
 		Failover:           failover,
+		Mode:               mode,
+		DegradationLevel:   degradationLevel,
 	}, nil
 }
 

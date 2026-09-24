@@ -8,6 +8,7 @@ export {
   CostAllocator,
   selectProvider,
 } from './economics.js';
+export { PricingEngine } from './pricing.js';
 export type {
   ResourceType,
   CostEvent,
@@ -25,3 +26,11 @@ export type {
   RoutingObjective,
   ProviderEconomics,
 } from './economics.js';
+export type {
+  PricingModel,
+  Tier,
+  VolumeDiscount,
+  PricingPlan,
+  Usage,
+  PriceQuote,
+} from './pricing.js';

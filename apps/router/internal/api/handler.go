@@ -50,6 +50,8 @@ type RouteResponse struct {
 	Candidates         []scoring.Candidate `json:"candidates"`
 	Reason             string              `json:"reason"`
 	Failover           bool                `json:"failover"`
+	Mode               scoring.Mode        `json:"mode"`
+	DegradationLevel   int                 `json:"degradation_level"`
 	TraceID            string              `json:"trace_id"`
 	DecidedAt          time.Time           `json:"decided_at"`
 }
@@ -89,6 +91,8 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		Candidates:         result.Candidates,
 		Reason:             result.Reason,
 		Failover:           result.Failover,
+		Mode:               result.Mode,
+		DegradationLevel:   result.DegradationLevel,
 		TraceID:            tc.TraceID,
 		DecidedAt:          time.Now().UTC(),
 	})
