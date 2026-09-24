@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 4 in corso (2026-09-24)** — graceful degradation (test 131) + pricing avanzato (test 132) verdi · Prossime: Router HA/Redis, GDPR, SDK connectors, K8s · Aggiornato: 2026-09-24
+> Stato: **Phase 4 in corso (2026-09-24)** — graceful degradation (test 131) + pricing avanzato (test 132) + GDPR completo (test 133) verdi · Prossime: Router HA/Redis, SDK connectors, K8s · Aggiornato: 2026-09-24
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -98,17 +98,17 @@
 ### Phase 4 — Scale, HA, espansione (in corso)
 **Obiettivo:** scalabilità e alta disponibilità, pricing avanzato, conformità GDPR, SDK per connector futuri, deployment.
 
-**Stato (2026-09-24):** **in corso** — acceptance test 131 (graceful degradation) + 132 (pricing avanzato) verdi. Fatto: **graceful degradation completa** (router: `mode` full/degraded/best_effort + `degradation_level` + best-effort fallback come safety net quando tutti i provider primari sono giù); **pricing avanzato** (cost-ledger: `PricingEngine` con modelli flat / per-unit / revenue-based / hybrid / tiered + volume discount).
+**Stato (2026-09-24):** **in corso** — acceptance test 131 (graceful degradation) + 132 (pricing avanzato) + 133 (GDPR completo) verdi. Fatto: **graceful degradation completa** (router: `mode` full/degraded/best_effort + `degradation_level` + best-effort fallback come safety net quando tutti i provider primari sono giù); **pricing avanzato** (cost-ledger: `PricingEngine` con modelli flat / per-unit / revenue-based / hybrid / tiered + volume discount); **GDPR completo** (diritti del data subject: export/portabilità, erasure, retention + Shopify privacy webhooks HMAC-verified).
 
 - [x] **Graceful degradation completa (cascata fallback)** — router Go: il risultato di routing espone `mode` (`full`/`degraded`/`best_effort`) e `degradation_level` (profondità della cascata); `SetBestEffort` designa un safety net selezionato (con quota riservata) quando nessun provider primario è eleggibile, invece di fallire. Test 131 (8 subtest).
 - [x] **Pricing avanzato** — cost-ledger `PricingEngine`: modelli `flat`, `per_unit`, `revenue_based` (% di revenue), `hybrid` (base + per-unit + revenue share), `tiered` (fasce volumetriche) + `volumeDiscount` (sconto sulla parte variabile, mai sulla base fissa). Test 132.
 - [ ] **Router HA (scaling orizzontale, coordinamento Redis), load test 1k/10k sessioni** — da fare.
-- [ ] **GDPR completo (export, deletion, retention), Shopify privacy webhooks** — da fare.
+- [x] **GDPR completo (export, deletion, retention), Shopify privacy webhooks** — `GdprService` (saas-backend): right of access/portability (`exportTenantData`/`exportCustomerData`), right to erasure (`deleteTenantData` soft-delete + `deleteCustomerData`), storage limitation (`purgeExpired` cron); migrazione `006` (`tenant.deleted_at`, `tenant.shop_domain`); route `GET /api/v1/gdpr/export`, `POST /api/v1/gdpr/delete`, `POST /api/v1/gdpr/retention/purge`; **Shopify privacy webhooks** `customers/data_request`/`customers/redact`/`shop/redact` su `POST /api/v1/webhooks/shopify/privacy` con verifica HMAC-SHA256 (raw body, `timingSafeEqual`) e routing shop→tenant via `shop_domain`. Test 133 (10 check).
 - [ ] **SDK per future connectors (Webflow, Wix, Squarespace, custom, mobile)** — da fare.
 - [ ] **Deployment Kubernetes** — da fare.
 
-**Acceptance (parziale):** test 131 (graceful degradation) + 132 (pricing avanzato) verdi. ✅ (2026-09-24)
-**Out of scope (spostato):** Router HA/Redis, load test, GDPR, SDK connectors, K8s.
+**Acceptance (parziale):** test 131 (graceful degradation) + 132 (pricing avanzato) + 133 (GDPR completo) verdi. ✅ (2026-09-24)
+**Out of scope (spostato):** Router HA/Redis, load test, SDK connectors, K8s.
 
 ## 3. Workstream (paralleli)
 

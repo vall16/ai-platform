@@ -20,6 +20,8 @@ import { registerTenantRoutes } from './routes/tenants.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerControlRoomRoutes } from './routes/control-room.js';
+import { registerGdprRoutes } from './routes/gdpr.js';
+import { GdprService } from './services/gdpr.js';
 import { ControlRoomService, type HealthProvider } from './services/control-room.js';
 import type { Provider } from '@ai-platform/contracts';
 import { Metrics } from './metrics.js';
@@ -99,6 +101,7 @@ export async function buildApp(
   const sessionService = new SessionService(pool, config.sessionPriceMicroUsd);
   const billingService = new BillingService(pool, config.stripeSecretKey);
   const quotaService = new QuotaService(pool, config.quotaFixedCostMicroUsd);
+  const gdprService = new GdprService(pool);
 
   // Agent (chatbot) wiring — mock-first providers, real cost ledger.
   const agentDeps = createAgentDependencies(pool);
@@ -136,6 +139,7 @@ export async function buildApp(
   registerSessionRoutes(app, sessionService, agentService, audioStore, authGuard, quotaService);
   registerBillingRoutes(app, billingService, authGuard, quotaService);
   registerControlRoomRoutes(app, controlRoomService, authGuard);
+  registerGdprRoutes(app, gdprService, authGuard, config);
 
   const ctx: AppContext = {
     close: async () => {

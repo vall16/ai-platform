@@ -9,6 +9,10 @@ export interface Tenant {
   status: TenantStatus;
   created_at: string;
   updated_at: string;
+  /** Set when the tenant exercises the right to erasure (GDPR). */
+  deleted_at?: string | null;
+  /** Shop domain (e.g. "myshop.myshopify.com") for privacy-webhook mapping. */
+  shop_domain?: string | null;
 }
 
 export type ProviderType = 'avatar' | 'voice' | 'stt' | 'llm' | 'tts' | 'commerce' | 'billing';

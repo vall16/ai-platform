@@ -10,6 +10,10 @@ export interface Config {
   sessionPriceMicroUsd: number;
   /** Amortized fixed overhead (micro USD) folded into the quota accounting cost. */
   quotaFixedCostMicroUsd: number;
+  /** Shared secret for verifying Shopify privacy-webhook HMAC signatures. */
+  shopifyWebhookSecret: string;
+  /** Data retention window (days) for the GDPR storage-limitation purge. */
+  dataRetentionDays: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -25,5 +29,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sessionPriceMicroUsd: parseInt(env.SESSION_PRICE_MICRO_USD ?? '100000', 10),
     // Amortized fixed overhead (micro USD) for the quota accounting cost basis.
     quotaFixedCostMicroUsd: parseInt(env.QUOTA_FIXED_COST_MICRO_USD ?? '0', 10),
+    // Shared secret for verifying Shopify privacy-webhook HMAC signatures.
+    shopifyWebhookSecret: env.SHOPIFY_WEBHOOK_SECRET ?? '',
+    // GDPR storage-limitation window (days) for the retention purge.
+    dataRetentionDays: parseInt(env.DATA_RETENTION_DAYS ?? '365', 10),
   };
 }
