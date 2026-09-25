@@ -160,7 +160,22 @@ func (b *Breaker) State() State {
 	return b.state
 }
 
-// Manager holds one breaker per provider ID.
+// Store is the shared circuit-breaker contract used by the scoring engine.
+// Implementations may be in-memory (single instance) or backed by a shared
+// store such as Redis. With a shared store, a breaker that trips on one router
+// instance is visible to every other instance, so the whole fleet stops sending
+// traffic to a failing provider together — again making the router stateless.
+type Store interface {
+	// Allow reports whether a request may be sent to the provider.
+	Allow(id string) bool
+	// RecordSuccess records a successful call for the provider.
+	RecordSuccess(id string)
+	// RecordFailure records a failed call for the provider.
+	RecordFailure(id string)
+}
+
+// Manager holds one breaker per provider ID. It satisfies Store and is the
+// default for single-instance deployments and tests.
 type Manager struct {
 	cfg      Config
 	mu       sync.Mutex
@@ -183,6 +198,10 @@ func (m *Manager) For(id string) *Breaker {
 	}
 	return br
 }
+
+// Allow reports whether a request may be sent to the provider, satisfying the
+// Store interface.
+func (m *Manager) Allow(id string) bool { return m.For(id).Allow() }
 
 // RecordSuccess records a success on the provider's breaker.
 func (m *Manager) RecordSuccess(id string) { m.For(id).RecordSuccess() }

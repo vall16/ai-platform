@@ -14,17 +14,19 @@ type MockProvider struct {
 	costPerUnit int64 // microdollars
 	latencyMs   int64
 	successRate float64
+	maxSessions int
 	healthy     bool
 }
 
 // MockProviderConfig configures a MockProvider instance.
 type MockProviderConfig struct {
-	ID          string
-	Name        string
-	Type        ProviderType
-	CostPerUnit int64
-	LatencyMs   int64
-	SuccessRate float64
+	ID                    string
+	Name                  string
+	Type                  ProviderType
+	CostPerUnit           int64
+	LatencyMs             int64
+	SuccessRate           float64
+	MaxConcurrentSessions int
 }
 
 // NewMockProvider creates a mock provider with the given config.
@@ -32,14 +34,18 @@ func NewMockProvider(cfg MockProviderConfig) *MockProvider {
 	if cfg.SuccessRate == 0 {
 		cfg.SuccessRate = 0.99
 	}
+	if cfg.MaxConcurrentSessions <= 0 {
+		cfg.MaxConcurrentSessions = 100
+	}
 	return &MockProvider{
-		id:          cfg.ID,
-		name:        cfg.Name,
-		typ:         cfg.Type,
-		costPerUnit: cfg.CostPerUnit,
-		latencyMs:   cfg.LatencyMs,
-		successRate: cfg.SuccessRate,
-		healthy:     true,
+		id:            cfg.ID,
+		name:          cfg.Name,
+		typ:           cfg.Type,
+		costPerUnit:   cfg.CostPerUnit,
+		latencyMs:     cfg.LatencyMs,
+		successRate:   cfg.SuccessRate,
+		maxSessions:   cfg.MaxConcurrentSessions,
+		healthy:       true,
 	}
 }
 
@@ -62,7 +68,7 @@ func (m *MockProvider) Health(_ context.Context) (HealthStatus, error) {
 func (m *MockProvider) Capabilities() (Capabilities, error) {
 	return Capabilities{
 		Streaming:             true,
-		MaxConcurrentSessions: 100,
+		MaxConcurrentSessions: m.maxSessions,
 		Languages:             []string{"en", "it"},
 		Features:              map[string]bool{"barge_in": true},
 	}, nil

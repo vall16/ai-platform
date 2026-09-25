@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/ai-platform/router/internal/obs"
 	"github.com/ai-platform/router/internal/provider"
 	"github.com/ai-platform/router/internal/quota"
+	"github.com/ai-platform/router/internal/redis"
 	"github.com/ai-platform/router/internal/resilience"
 	"github.com/ai-platform/router/internal/scoring"
 )
@@ -51,13 +54,37 @@ func main() {
 		SuccessRate: 0.99,
 	}))
 
-	// Build resilience + capacity dependencies and the scoring engine.
-	breakers := resilience.NewManager(resilience.DefaultConfig())
-	tracker := quota.NewTracker()
-	engine := scoring.NewEngine(registry, breakers, tracker)
-
 	// Structured JSON logger (carries trace_id per request).
 	logger := obs.New(os.Stdout, "router")
+
+	// Build resilience + capacity dependencies and the scoring engine. When
+	// REDIS_URL is set, quota and circuit-breaker state are coordinated through
+	// a shared Redis instance so the router can run as stateless, horizontally
+	// scaled replicas: a provider's MaxConcurrentSessions is enforced fleet-wide
+	// and a breaker trip on one replica is honored by all. Otherwise it falls
+	// back to per-instance in-memory state.
+	ctx := context.Background()
+	var breakers resilience.Store
+	var tracker quota.Store
+	if url := os.Getenv("REDIS_URL"); url != "" {
+		addr := redisAddr(url)
+		client, err := redis.Dial(ctx, addr)
+		if err != nil {
+			logger.Error("redis dial failed; using in-memory stores", "addr", addr, "err", err.Error())
+		} else {
+			defer client.Close()
+			breakers = resilience.NewRedisStore(client, resilience.DefaultConfig(), "", 0)
+			tracker = quota.NewRedisStore(client, "", 0)
+			logger.Info("using shared redis stores", "addr", addr)
+		}
+	}
+	if breakers == nil {
+		breakers = resilience.NewManager(resilience.DefaultConfig())
+	}
+	if tracker == nil {
+		tracker = quota.NewTracker()
+	}
+	engine := scoring.NewEngine(registry, breakers, tracker)
 
 	// Build HTTP server.
 	server := api.NewServer(engine, registry, logger)
@@ -92,4 +119,18 @@ func main() {
 
 	logger.Info("shutting down")
 	httpServer.Close()
+}
+
+// redisAddr reduces a REDIS_URL (e.g. "redis://host:6379" or
+// "redis://:pass@host:6379") to the host:port the minimal stdlib client dials.
+// The client does not implement AUTH, so any credentials are ignored.
+func redisAddr(url string) string {
+	s := url
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.LastIndex(s, "@"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
 }

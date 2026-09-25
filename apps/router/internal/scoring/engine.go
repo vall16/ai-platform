@@ -64,15 +64,17 @@ type Result struct {
 type Engine struct {
 	registry   *provider.Registry
 	weights    Weights
-	breakers   *resilience.Manager
-	tracker    *quota.Tracker
+	breakers   resilience.Store
+	tracker    quota.Store
 	bestEffort provider.Provider
 }
 
 // NewEngine creates a scoring engine with the given registry, circuit-breaker
-// manager and capacity tracker. breakers or tracker may be nil to disable the
-// corresponding gate.
-func NewEngine(reg *provider.Registry, breakers *resilience.Manager, tracker *quota.Tracker) *Engine {
+// store and capacity store. breakers or tracker may be nil to disable the
+// corresponding gate. Both stores may be shared across many engine instances
+// (e.g. one per router replica) to coordinate quota and circuit-breaker state
+// horizontally; pass an in-memory store for a single-instance deployment.
+func NewEngine(reg *provider.Registry, breakers resilience.Store, tracker quota.Store) *Engine {
 	return &Engine{
 		registry: reg,
 		weights:  DefaultWeights,
@@ -143,7 +145,7 @@ func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) 
 		}
 
 		// Circuit-breaker gate.
-		if e.breakers != nil && !e.breakers.For(p.ID()).Allow() {
+		if e.breakers != nil && !e.breakers.Allow(p.ID()) {
 			c.Eligible = false
 			c.SkipReason = "circuit_open"
 			evals = append(evals, eval{provider: p, cand: c})
