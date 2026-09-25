@@ -1,0 +1,24 @@
+{
+  "name": "@ai-platform/connector-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Connector SDK — transport-agnostic client for the AI Platform SaaS backend, shared by all front-end connectors (Webflow, Wix, Squarespace, custom sites, mobile)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/connector-sdk.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}
