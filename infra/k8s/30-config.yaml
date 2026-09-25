@@ -1,0 +1,44 @@
+# Non-secret configuration (ConfigMap) + secrets (Secret).
+#
+# REPLACE the placeholder secret values before deploying. For production, create
+# the Secret out-of-band (e.g. `kubectl create secret`) and remove the
+# stringData block, or use an external secret manager.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-platform-config
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/part-of: ai-platform
+data:
+  # Backend
+  PORT: "3000"
+  HOST: "0.0.0.0"
+  API_KEY_PREFIX: "sk_live_"
+  SESSION_PRICE_MICRO_USD: "100000"
+  QUOTA_FIXED_COST_MICRO_USD: "0"
+  DATA_RETENTION_DAYS: "365"
+  # Router
+  ROUTER_PORT: "8080"
+  REDIS_URL: "redis://redis:6379"
+  # Migration runner (backend image path + connection wait)
+  MIGRATIONS_DIR: "/app/packages/db/src/migrations"
+  MIGRATE_MAX_WAIT_MS: "120000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-platform-secrets
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/part-of: ai-platform
+type: Opaque
+stringData:
+  # Postgres (must match the POSTGRES_PASSWORD used by the StatefulSet)
+  POSTGRES_PASSWORD: "change-me-in-prod"
+  DATABASE_URL: "postgres://postgres:change-me-in-prod@postgres:5432/ai_platform"
+  # Stripe
+  STRIPE_SECRET_KEY: ""
+  STRIPE_WEBHOOK_SECRET: ""
+  # Shopify privacy webhooks (HMAC shared secret)
+  SHOPIFY_WEBHOOK_SECRET: ""

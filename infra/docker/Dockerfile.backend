@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+#
+# SaaS backend (Node 20, Fastify). Built from the repo ROOT so npm workspaces
+# can resolve the local @ai-platform/* packages:
+#   docker build -f infra/docker/Dockerfile.backend -t ai-platform/backend .
+#
+# The image runs the compiled backend (apps/saas-backend/dist/index.js).
+
+# ---- build ----
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# Copy the whole workspace (source only — .dockerignore strips node_modules,
+# dist, .git, .qwen), install deps, then compile every workspace.
+COPY . .
+RUN npm ci --no-audit --no-fund
+RUN npm run build
+
+# ---- run ----
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+
+# node_modules carries the workspace symlinks; apps/packages/integrations hold
+# the built dist output those symlinks resolve to at runtime.
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps ./apps
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/integrations ./integrations
+
+USER node
+EXPOSE 3000
+CMD ["node", "apps/saas-backend/dist/index.js"]

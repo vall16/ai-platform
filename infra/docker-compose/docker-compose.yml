@@ -1,0 +1,40 @@
+# Local development data stores (Postgres + Redis).
+#
+# Run the app code locally (`npm run dev` for the backend, `go run ./cmd/router`
+# for the router) and use this compose file for the infrastructure:
+#
+#   docker compose -f infra/docker-compose/docker-compose.yml up -d
+#   DATABASE_URL=postgres://postgres:sa@localhost:5432/ai_platform npm run dev -w @ai-platform/saas-backend
+#
+# Credentials match docs/DATABASE.md (postgres / sa / ai_platform).
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-platform-postgres
+    environment:
+      POSTGRES_DB: ai_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: sa
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

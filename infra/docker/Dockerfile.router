@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+#
+# Inference Router (Go, stdlib-only — no external module deps). Built from the
+# apps/router directory:
+#   docker build -f infra/docker/Dockerfile.router -t ai-platform/router apps/router
+#
+# Produces a small static binary in a minimal base image.
+
+# ---- build ----
+FROM golang:1.22-alpine AS build
+WORKDIR /src
+COPY go.mod ./
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/router ./cmd/router
+
+# ---- run ----
+FROM alpine:3.19
+RUN addgroup -S app && adduser -S app -G app
+USER app
+COPY --from=build /out/router /usr/local/bin/router
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/router"]

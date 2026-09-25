@@ -1,0 +1,63 @@
+# Inference Router (Go, stateless). Scales horizontally; shared quota +
+# circuit-breaker state lives in Redis (REDIS_URL).
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: router
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  selector:
+    app.kubernetes.io/name: router
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: router
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: router
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: router
+        app.kubernetes.io/part-of: ai-platform
+    spec:
+      containers:
+        - name: router
+          image: ai-platform/router:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ai-platform-config
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi

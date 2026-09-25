@@ -1,0 +1,24 @@
+# OPTIONAL — only apply if your cluster runs an Ingress controller
+# (e.g. nginx-ingress). Exposes the backend API. Adjust host + ingressClassName.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-platform
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/part-of: ai-platform
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ai-platform.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 3000
