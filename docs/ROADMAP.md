@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 4 completata (2026-09-27)** — graceful degradation (test 131) + pricing avanzato (test 132) + GDPR completo (test 133) + Router HA/Redis (test 134) + SDK connector + Deployment Kubernetes + Monitoring (Prometheus/Grafana) · Aggiornato: 2026-09-28
+> Stato: **Phase 5 completata (2026-09-28)** — integrazioni front-end AI Salesperson: app Shopify (theme app extension) + plugin WooCommerce (widget condiviso vanilla JS) · Aggiornato: 2026-09-28
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -72,7 +72,7 @@
 - [x] **Commerce tools** — `search_products`, `get_product`, `add_to_cart`, `start_checkout` in AgentCore; loop tool per sessioni salesperson; `MockCommerceToolProvider` offline.
 - [x] **Revenue attribution** — colonne `cart_additions`/`orders_influenced`/`revenue_influenced` su `session`; tracking in AgentCore, persistenza in AgentService, aggregazione nel Control Room.
 - [x] **Cost Ledger completo: quota prepagata** — schema `tenant_quota`, `QuotaService` (setQuota/getBalance/assertAvailable/consume/getEconomics), config `QUOTA_FIXED_COST_MICRO_USD`, gate 402 `quota_exhausted`, consumo del costo marginale per messaggio, economics marginal vs accounting cost + gross margin; route billing `POST/GET /api/v1/billing/quota`.
-- [ ] **Shopify app + plugin WooCommerce** — theme extension, app embed block, installer (da fare).
+- [x] **Shopify app + plugin WooCommerce** — theme extension + plugin WooCommerce consegnati in **Phase 5** (widget condiviso installabile). L'app embed (dashboard admin Shopify) resta out of scope.
 - [ ] **Routing cost-aware + Control Room v1 + merchant dashboard** — policy per piano, capacity routing, `EstimatedSessionCost`, routing chart, alerting, analytics per prodotto, historical pricing (da fare).
 
 **Acceptance:** test 126 (AI Salesperson) + 129 (prepaid quota) verdi. ✅ (2026-09-23)
@@ -109,6 +109,19 @@
 - [x] **Monitoring (Prometheus + ServiceMonitor + Grafana)** — stack di osservabilità su Kubernetes via `kube-prometheus-stack` (Helm): Prometheus Operator + Prometheus + Grafana + Alertmanager nel namespace `ai-platform`; **ServiceMonitor** per `backend` (`/metrics`:3000) e `router` (`/metrics`:8080); **endpoint `/metrics` nel router Go** (registry Prometheus self-contained, stdlib-only: `router_route_requests_total`, `router_route_duration_seconds` histogram, `router_provider_outcomes_total`); **dashboard Grafana "AI Platform"** (request rate, p50/p95/p99, error rate, active sessions, route decisions, provider outcomes) caricata automaticamente dal sidecar. Corretto un bug di doppio conteggio negli histogram (router + backend). File in `infra/k8s/monitoring/`.
 
 **Acceptance:** test 131 (graceful degradation) + 132 (pricing avanzato) + 133 (GDPR completo) + 134 (Router HA) + SDK connector (21 test) verdi + Deployment Kubernetes (Dockerfile + manifest + runner migrazioni) + Monitoring (Prometheus/Grafana). ✅ (2026-09-28)
+
+### Phase 5 — AI Salesperson: integrazioni front-end (completata)
+**Obiettivo:** rendere installabile il prodotto AI Salesperson: app Shopify (theme app extension) + plugin WooCommerce, che spediscono il widget condiviso e parlano con il backend SaaS (il backend chiama le Admin API della piattaforma, non lo storefront).
+
+**Stato (2026-09-28):** **completata** — app Shopify (theme app extension) + plugin WooCommerce consegnati. Fatto: **widget AI Salesperson condiviso** (vanilla JS autocontenuto, no build step: ciclo di vita sessione salesperson, campi commerce, input vocale Web Speech API, linkify URL checkout, tema dark/light); **plugin WooCommerce** (main + settings page + shortcode + WP_Widget + REST config; live/mock switch su consumer key/secret); **app Shopify** (theme app extension: manifest toml, block "AI Salesperson Chat", asset, locales; iniezione config via Liquid). Il widget è identico byte-per-byte tra le due integrazioni.
+
+- [x] **Widget AI Salesperson condiviso** — vanilla JS IIFE autocontenuto (no bundler, coerente col plugin WP): `startSession` (body `product_type: salesperson` + `shop_name`/`shop_url`/`platform`/`currency`/`shop_credentials`/`language`/`personality`, campi vuoti rimossi → demo mode), `sendMessage` (POST `/sessions/:id/messages` → `reply` + `audio_url`), input vocale (Web Speech API), `renderRich` (escapeHtml + linkify URL, XSS-safe), IntersectionObserver lazy init, tema dark/light.
+- [x] **Plugin WooCommerce** — `ai-salesperson.php` + `includes/` (core: shortcode + asset + REST route + live/mock switch, settings page, WP_Widget) + `assets/` (widget JS/CSS + admin). Live se consumer key+secret presenti (altrimenti demo mode); shortcode `[ai_salesperson]`; `platform: woocommerce`.
+- [x] **App Shopify (theme app extension)** — `shopify.theme.extension.toml` + `blocks/ai-salesperson-chat.liquid` (schema + iniezione `window.aiSalespersonConfig` via Liquid + asset) + `assets/` (widget JS/CSS) + `locales/`. `platform: shopify`, `shopUrl: shop.url`, `shopCredentials.access_token` dal token custom app (vuoto → demo mode).
+- [x] **Documentazione** — README per ogni integrazione + `integrations/README.md` aggiornato (due approcci front-end: widget vanilla installabile vs `@ai-platform/connector-sdk` per consumer tipati).
+
+**Acceptance:** widget condiviso validato (`node --check` su entrambe le copie), JSON/TOML validi, widget identico byte-per-byte tra Shopify e WooCommerce (`fc /b`). ✅ (2026-09-28)
+**Out of scope:** OAuth server-side (il merchant incolla il token, come nel plugin WP), app embed (dashboard admin Shopify), routing cost-aware / Control Room v1 / merchant dashboard (restano da Phase 2/3).
 
 ## 3. Workstream (paralleli)
 

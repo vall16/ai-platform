@@ -1,0 +1,9 @@
+{
+  "name": "@ai-platform/woocommerce-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WooCommerce plugin for the AI Salesperson shopping assistant widget",
+  "scripts": {
+    "lint": "echo 'PHP lint: use phpcs with WordPress coding standards'"
+  }
+}

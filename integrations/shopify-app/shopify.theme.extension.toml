@@ -1,0 +1,7 @@
+name = "AI Salesperson"
+version = "1.0.0"
+
+# Theme app extension: adds an "AI Salesperson Chat" block that can be dropped
+# into any theme section. The block ships the shared widget (assets/) and talks
+# to the AI Platform SaaS backend. The backend (not the storefront) calls the
+# Shopify Admin API using the custom-app access token configured in the block.

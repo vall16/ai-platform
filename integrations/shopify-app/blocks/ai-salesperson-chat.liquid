@@ -1,0 +1,103 @@
+{% schema %}
+{
+  "name": "AI Salesperson Chat",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_base",
+      "label": "API Base URL",
+      "info": "Base URL of your AI Platform backend (no trailing slash)."
+    },
+    {
+      "type": "text",
+      "id": "api_key",
+      "label": "API Key",
+      "info": "Tenant API key from the Control Room."
+    },
+    {
+      "type": "text",
+      "id": "shop_name",
+      "label": "Shop Name",
+      "info": "Shown in the widget header. Defaults to your store name if empty."
+    },
+    {
+      "type": "text",
+      "id": "currency",
+      "label": "Currency",
+      "info": "ISO currency code. Defaults to your store currency if empty."
+    },
+    {
+      "type": "text",
+      "id": "access_token",
+      "label": "Shopify Admin API Access Token",
+      "info": "Custom app token with read_products scope. Leave empty for demo mode."
+    },
+    {
+      "type": "select",
+      "id": "language",
+      "label": "Language",
+      "options": [
+        { "value": "en", "label": "English" },
+        { "value": "it", "label": "Italiano" }
+      ],
+      "default": "en"
+    },
+    {
+      "type": "textarea",
+      "id": "personality",
+      "label": "Personality / System Prompt",
+      "info": "Optional. Overrides the tenant default persona."
+    },
+    {
+      "type": "text",
+      "id": "greeting",
+      "label": "Greeting",
+      "default": "Hi! I'm your shopping assistant. What are you looking for?"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_voice",
+      "label": "Enable voice input",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "theme",
+      "label": "Theme",
+      "options": [
+        { "value": "light", "label": "Light" },
+        { "value": "dark", "label": "Dark" }
+      ],
+      "default": "light"
+    }
+  ]
+}
+{% endschema %}
+
+{% liquid
+  assign has_token = block.settings.access_token | strip | size > 0
+%}
+<div id="ai-salesperson-widget-{{ block.id }}" class="ai-salesperson-widget" data-theme="{{ block.settings.theme }}"></div>
+<script>
+  (function () {
+    var hasToken = {{ has_token | json }};
+    window.aiSalespersonConfig = {
+      widgetId: 'ai-salesperson-widget-{{ block.id }}',
+      apiBase: {{ block.settings.api_base | strip | json }},
+      apiKey: {{ block.settings.api_key | strip | json }},
+      shopName: {{ (block.settings.shop_name | strip | default: shop.name) | json }},
+      shopUrl: {{ shop.url | json }},
+      platform: 'shopify',
+      currency: {{ (block.settings.currency | strip | default: shop.currency) | json }},
+      shopCredentials: hasToken ? { access_token: {{ block.settings.access_token | strip | json }} } : null,
+      language: {{ block.settings.language | json }},
+      personality: {{ block.settings.personality | json }},
+      greeting: {{ block.settings.greeting | json }},
+      enableVoice: {{ block.settings.enable_voice | json }},
+      theme: {{ block.settings.theme | json }}
+    };
+  })();
+</script>
+<script src="{{ 'ai-salesperson.js' | asset_url }}" defer></script>
+<link rel="stylesheet" href="{{ 'ai-salesperson.css' | asset_url }}">

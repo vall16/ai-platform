@@ -1,0 +1,9 @@
+{
+  "name": "@ai-platform/shopify-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shopify theme app extension for the AI Salesperson shopping assistant widget",
+  "scripts": {
+    "lint": "echo 'Theme extension: validate with the Shopify CLI (shopify theme app extension dev)'"
+  }
+}

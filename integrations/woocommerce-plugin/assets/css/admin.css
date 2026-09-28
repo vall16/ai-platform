@@ -1,0 +1,13 @@
+/* AI Salesperson — admin panel styles */
+
+.ai-salesperson-admin-preview {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f6f7f7;
+  border: 1px solid #dcdcde;
+  border-radius: 4px;
+}
+
+.ai-salesperson-admin-preview h3 {
+  margin-top: 0;
+}

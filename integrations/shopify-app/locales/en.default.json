@@ -1,0 +1,19 @@
+{
+  "blocks": {
+    "ai-salesperson-chat": {
+      "name": "AI Salesperson Chat",
+      "settings": {
+        "api_base": "API Base URL",
+        "api_key": "API Key",
+        "shop_name": "Shop Name",
+        "currency": "Currency",
+        "access_token": "Shopify Admin API Access Token",
+        "language": "Language",
+        "personality": "Personality / System Prompt",
+        "greeting": "Greeting",
+        "enable_voice": "Enable voice input",
+        "theme": "Theme"
+      }
+    }
+  }
+}
