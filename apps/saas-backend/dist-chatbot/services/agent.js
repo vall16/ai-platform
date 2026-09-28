@@ -7,10 +7,14 @@ export class AgentService {
     core;
     pool;
     audioStore;
-    constructor(core, pool, audioStore) {
+    quotaService;
+    constructor(core, pool, audioStore, 
+    /** Prepaid quota: marginal cost of each turn is consumed from it. */
+    quotaService) {
         this.core = core;
         this.pool = pool;
         this.audioStore = audioStore;
+        this.quotaService = quotaService;
     }
     /**
      * Resolve a tenant-scoped active session and register its state with the core.
@@ -52,6 +56,16 @@ export class AgentService {
             siteName: typeof meta.site_name === 'string' ? meta.site_name : undefined,
             siteDescription: typeof meta.site_description === 'string' ? meta.site_description : undefined,
             siteUrl: typeof meta.site_url === 'string' ? meta.site_url : undefined,
+            // Commerce (AI Salesperson): product type + shop config drive the live
+            // commerce bridge (Shopify / WooCommerce) vs the mock catalog.
+            productType,
+            shopName: typeof meta.shop_name === 'string' ? meta.shop_name : undefined,
+            shopUrl: typeof meta.shop_url === 'string' ? meta.shop_url : undefined,
+            platform: meta.platform === 'shopify' || meta.platform === 'woocommerce' ? meta.platform : undefined,
+            currency: typeof meta.currency === 'string' ? meta.currency : undefined,
+            shopCredentials: meta.shop_credentials && typeof meta.shop_credentials === 'object'
+                ? meta.shop_credentials
+                : undefined,
         };
     }
     /** Run one user message through the agent and persist audio + cost. */
@@ -65,6 +79,17 @@ export class AgentService {
         }
         if (result.costMicroUsd > 0) {
             await this.pool.query(`UPDATE session SET total_cost_micro_usd = total_cost_micro_usd + $1 WHERE id = $2`, [result.costMicroUsd, sessionId]);
+            await this.quotaService?.consume(tenantId, result.costMicroUsd);
+        }
+        // Persist commerce attribution (salesperson): the agent's cart/checkout
+        // actions, so the Control Room can report influenced revenue per session.
+        const c = result.commerce;
+        if (c && (c.cartAdditions > 0 || c.ordersInfluenced > 0 || c.revenueInfluencedMicroUsd > 0)) {
+            await this.pool.query(`UPDATE session
+         SET cart_additions = cart_additions + $1,
+             orders_influenced = orders_influenced + $2,
+             revenue_influenced = revenue_influenced + $3
+         WHERE id = $4`, [c.cartAdditions, c.ordersInfluenced, c.revenueInfluencedMicroUsd, sessionId]);
         }
         return { ...result, audioId };
     }
@@ -85,6 +110,7 @@ export class AgentService {
         const totalCost = sttCost + result.costMicroUsd;
         if (totalCost > 0) {
             await this.pool.query(`UPDATE session SET total_cost_micro_usd = total_cost_micro_usd + $1 WHERE id = $2`, [totalCost, sessionId]);
+            await this.quotaService?.consume(tenantId, totalCost);
         }
         return { ...result, audioId, transcript };
     }

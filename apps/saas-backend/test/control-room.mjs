@@ -10,6 +10,7 @@ function makeFakePool({ revenueToday = 200000, revenueTotal = 500000, costToday 
     async query(sql) {
       if (/SUM\(revenue_micro_usd\)/.test(sql)) return { rows: [{ today: revenueToday, total: revenueTotal }] };
       if (/last_1m/.test(sql)) return { rows: [{ last_1m: 0, last_5m: 0, today: costToday, total: costTotal }] };
+      if (/SUM\(cart_additions\)/.test(sql)) return { rows: [{ cart_additions: 0, orders_influenced: 0, revenue_influenced: 0 }] };
       if (/GROUP BY resource_type/.test(sql)) return { rows: [{ resource_type: 'llm', cost: costTotal }] };
       if (/GROUP BY provider_id/.test(sql)) return { rows: [] };
       if (/FROM provider/.test(sql)) return { rows: [] };

@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 5 completata (2026-09-28)** — integrazioni front-end AI Salesperson: app Shopify (theme app extension) + plugin WooCommerce (widget condiviso vanilla JS) · Aggiornato: 2026-09-28
+> Stato: **Phase 6 completata (2026-09-28)** — Dashboards + cost-aware routing: merchant dashboard (analytics per tenant), Control Room v1 (routing chart, cost/margin time series, alerting), routing cost-aware per piano + `EstimatedSessionCost` + historical pricing · Aggiornato: 2026-09-28
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -73,7 +73,7 @@
 - [x] **Revenue attribution** — colonne `cart_additions`/`orders_influenced`/`revenue_influenced` su `session`; tracking in AgentCore, persistenza in AgentService, aggregazione nel Control Room.
 - [x] **Cost Ledger completo: quota prepagata** — schema `tenant_quota`, `QuotaService` (setQuota/getBalance/assertAvailable/consume/getEconomics), config `QUOTA_FIXED_COST_MICRO_USD`, gate 402 `quota_exhausted`, consumo del costo marginale per messaggio, economics marginal vs accounting cost + gross margin; route billing `POST/GET /api/v1/billing/quota`.
 - [x] **Shopify app + plugin WooCommerce** — theme extension + plugin WooCommerce consegnati in **Phase 5** (widget condiviso installabile). L'app embed (dashboard admin Shopify) resta out of scope.
-- [ ] **Routing cost-aware + Control Room v1 + merchant dashboard** — policy per piano, capacity routing, `EstimatedSessionCost`, routing chart, alerting, analytics per prodotto, historical pricing (da fare).
+- [x] **Routing cost-aware + Control Room v1 + merchant dashboard** — consegnato in **Phase 6**: policy per piano, `EstimatedSessionCost`, routing chart, alerting, analytics per prodotto, historical pricing.
 
 **Acceptance:** test 126 (AI Salesperson) + 129 (prepaid quota) verdi. ✅ (2026-09-23)
 **Out of scope (spostato):** Shopify app UI, routing cost-aware, Control Room v1, merchant dashboard, historical pricing.
@@ -121,7 +121,20 @@
 - [x] **Documentazione** — README per ogni integrazione + `integrations/README.md` aggiornato (due approcci front-end: widget vanilla installabile vs `@ai-platform/connector-sdk` per consumer tipati).
 
 **Acceptance:** widget condiviso validato (`node --check` su entrambe le copie), JSON/TOML validi, widget identico byte-per-byte tra Shopify e WooCommerce (`fc /b`). ✅ (2026-09-28)
-**Out of scope:** OAuth server-side (il merchant incolla il token, come nel plugin WP), app embed (dashboard admin Shopify), routing cost-aware / Control Room v1 / merchant dashboard (restano da Phase 2/3).
+**Out of scope:** OAuth server-side (il merchant incolla il token, come nel plugin WP), app embed (dashboard admin Shopify). (Routing cost-aware / Control Room v1 / merchant dashboard consegnati in **Phase 6**.)
+
+### Phase 6 — Dashboards + cost-aware routing (completata)
+**Obiettivo:** chiudere i due filoni aperti dalle fasi precedenti — visibilità economica (dashboards) e routing che tiene conto del costo e del piano (cost-aware routing).
+
+**Stato (2026-09-28):** **completata** — acceptance test 135 (merchant dashboard) + 136 (Control Room v1) + 137 (cost-aware routing, Go) + 138 (historical pricing) verdi. Fatto: **merchant dashboard** (analytics per tenant, scope `WHERE tenant_id = $1`, range 7/30/90/tutto: sessioni, costo per risorsa, revenue, margine lordo, commerce, serie giornaliera + dashboard HTML self-contained); **Control Room v1** (overview piattaforma-wide: distribuzione routing per provider e per risorsa, serie oraria cost/revenue/margine, alerting su 4 regole — high cost rate, low margin, high load, provider unhealthy — + dashboard HTML con sezioni Routing/Serie/Alert); **routing cost-aware** (router Go: `Policy`/`PlanPolicies` per piano, `RouteWithPolicy` con gate cost-cap + allow-list, endpoint `GET /api/v1/estimate` per `EstimatedSessionCost`, campo `plan` nella route request, policy cablate in `main.go`); **historical pricing** (backend: `PricingService` che risolve il rate in vigore a un istante dalla tabella `pricing` bitemporale + route `GET /api/v1/pricing/effective` e `/history`).
+
+- [x] **Merchant dashboard (analytics per tenant)** — `MerchantAnalyticsService` (saas-backend): un aggregate pass su `session` (totali, attive, costo, revenue, commerce) + query per status/prodotto/risorsa/serie giornaliera, tutte tenant-scoped; route `GET /api/v1/merchant/analytics?days=` (authGuard) + dashboard HTML self-contained `GET /merchant` (API key in localStorage, auto-refresh 15s). Test 135 (5 check).
+- [x] **Control Room v1 (routing chart, cost/margin time series, alerting)** — `ControlRoomService` esteso: distribuzione routing (per provider + per risorsa da `routing_decision`), serie oraria cost (`usage_ledger`) / revenue (`session`) / margine (revenue − cost) con ore mancanti a 0, alerting su soglie configurabili (`high_cost_rate`, `low_margin`, `high_load`, `provider_unhealthy`); dashboard HTML con sezioni Routing/Serie/Alert. Test 136 (20 check).
+- [x] **Routing cost-aware per piano + `EstimatedSessionCost`** — router Go (stdlib-only): `Policy` (`MaxCostPerUnitMicroUsd` + `AllowedProviderIDs`) e `PlanPolicies` (risoluzione piano→policy con fallback); `Engine.RouteWithPolicy` applica i gate cost-cap (`over_cost_cap`) e allow-list (`plan_not_allowed`) prima dello scoring; `EstimateSessionCost` (pre-flight: provider più economico eleggibile sotto policy × unità attese); campo `plan` in `RouteRequest`, `SetPlanPolicies` sul server, endpoint `GET /api/v1/estimate?resource_type=&units=&plan=`; policy per piano cablate in `main.go` (starter cap 50k, pro/enterprise senza vincoli). Test 137 (8 subtest).
+- [x] **Historical pricing** — `PricingService` (saas-backend): `effectiveCost(provider, resource, at)` risolve il rate in vigore a un istante dalla tabella `pricing` (`effective_from <= at AND (effective_to IS NULL OR effective_to > at)`), `history` restituisce la timeline completa; route `GET /api/v1/pricing/effective` (404 se nessun rate in vigore) e `GET /api/v1/pricing/history` (authGuard). Test 138 (8 check).
+
+**Acceptance:** test 135 (merchant dashboard) + 136 (Control Room v1) + 137 (cost-aware routing, Go) + 138 (historical pricing) verdi. ✅ (2026-09-28)
+**Out of scope:** app embed Shopify, OAuth server-side, shadow routing / benchmarking / what-if (restano da Phase 3), region routing / data residency.
 
 ## 3. Workstream (paralleli)
 

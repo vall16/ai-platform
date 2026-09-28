@@ -25,6 +25,34 @@ export interface ProviderHealth {
   detail?: string;
 }
 
+/**
+ * Alerting thresholds (Phase 6). Each maps to a rule evaluated in overview();
+ * a breached rule produces an entry in `alerts`. Defaults are conservative so
+ * a fresh platform stays quiet.
+ */
+export interface AlertThresholds {
+  /** Warn when cost accrued in the last 5 minutes exceeds this (micro USD). */
+  costLast5mMicroUsd: number;
+  /** Warn when gross margin % drops below this (only when revenue > 0). */
+  marginPct: number;
+  /** Warn when the number of active sessions exceeds this. */
+  activeSessions: number;
+}
+
+export const DEFAULT_ALERT_THRESHOLDS: AlertThresholds = {
+  costLast5mMicroUsd: 1_000_000, // $1 in 5 minutes
+  marginPct: 50,
+  activeSessions: 100,
+};
+
+export interface Alert {
+  severity: 'info' | 'warn' | 'critical';
+  code: string;
+  message: string;
+  value: number;
+  threshold: number;
+}
+
 export interface ControlRoomOverview {
   generated_at: string;
   sessions: {
@@ -63,16 +91,27 @@ export interface ControlRoomOverview {
     last_seen_at: string;
   }>;
   provider_health: ProviderHealth[];
+  /** Routing distribution (Phase 6): how decisions split across providers/resources. */
+  routing: {
+    total: number;
+    by_provider: Record<string, number>;
+    by_resource_type: Record<string, number>;
+  };
+  /** Hourly cost/revenue/margin series over the last 24h (Phase 6). */
+  series: Array<{ hour: string; cost_micro_usd: number; revenue_micro_usd: number; margin_micro_usd: number }>;
+  /** Threshold alerts (Phase 6); empty when everything is within limits. */
+  alerts: Alert[];
 }
 
 export class ControlRoomService {
   constructor(
     private readonly pool: Pool,
     private readonly providers: HealthProvider[] = [],
+    private readonly thresholds: AlertThresholds = DEFAULT_ALERT_THRESHOLDS,
   ) {}
 
   async overview(): Promise<ControlRoomOverview> {
-    const [statusRows, productRows, revenueRow, commerceRow, costRow, resourceRows, providerRows, usageRows, providerHealth] =
+    const [statusRows, productRows, revenueRow, commerceRow, costRow, resourceRows, providerRows, usageRows, routingProviderRows, routingResourceRows, costSeriesRows, revenueSeriesRows, providerHealth] =
       await Promise.all([
         this.pool.query(`SELECT status, COUNT(*)::int AS n FROM session GROUP BY status`),
         this.pool.query(`SELECT product_type, COUNT(*)::int AS n FROM session GROUP BY product_type`),
@@ -112,6 +151,28 @@ export class ControlRoomService {
            GROUP BY provider_id
            ORDER BY last_seen_at DESC`,
         ),
+        this.pool.query(
+          `SELECT selected_provider_id, COUNT(*)::int AS n
+           FROM routing_decision GROUP BY selected_provider_id ORDER BY n DESC`,
+        ),
+        this.pool.query(
+          `SELECT resource_type, COUNT(*)::int AS n
+           FROM routing_decision GROUP BY resource_type ORDER BY n DESC`,
+        ),
+        this.pool.query(
+          `SELECT to_char(date_trunc('hour', created_at), 'YYYY-MM-DD HH24:00') AS hour,
+                  COALESCE(SUM(cost_micro_usd), 0)::bigint AS cost
+           FROM usage_ledger
+           WHERE created_at > now() - interval '24 hours'
+           GROUP BY 1 ORDER BY 1`,
+        ),
+        this.pool.query(
+          `SELECT to_char(date_trunc('hour', started_at), 'YYYY-MM-DD HH24:00') AS hour,
+                  COALESCE(SUM(revenue_micro_usd), 0)::bigint AS revenue
+           FROM session
+           WHERE started_at > now() - interval '24 hours'
+           GROUP BY 1 ORDER BY 1`,
+        ),
         this.gatherHealth(),
       ]);
 
@@ -150,6 +211,80 @@ export class ControlRoomService {
     const grossMargin = revenueTotal - costTotal;
     const grossMarginPct = revenueTotal > 0 ? (grossMargin / revenueTotal) * 100 : null;
 
+    // Routing distribution (Phase 6).
+    const routingByProvider: Record<string, number> = {};
+    let routingTotal = 0;
+    for (const row of routingProviderRows.rows) {
+      routingByProvider[row.selected_provider_id] = row.n;
+      routingTotal += row.n;
+    }
+    const routingByResource: Record<string, number> = {};
+    for (const row of routingResourceRows.rows) routingByResource[row.resource_type] = row.n;
+
+    // Hourly cost/revenue/margin series over the last 24h (Phase 6). Hours are
+    // merged from the two independent aggregates; missing hours read as 0.
+    const seriesMap = new Map<string, { cost: number; revenue: number }>();
+    for (const row of costSeriesRows.rows) {
+      const cur = seriesMap.get(row.hour) ?? { cost: 0, revenue: 0 };
+      cur.cost = Number(row.cost);
+      seriesMap.set(row.hour, cur);
+    }
+    for (const row of revenueSeriesRows.rows) {
+      const cur = seriesMap.get(row.hour) ?? { cost: 0, revenue: 0 };
+      cur.revenue = Number(row.revenue);
+      seriesMap.set(row.hour, cur);
+    }
+    const series = [...seriesMap.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([hour, v]) => ({
+        hour,
+        cost_micro_usd: v.cost,
+        revenue_micro_usd: v.revenue,
+        margin_micro_usd: v.revenue - v.cost,
+      }));
+
+    // Threshold alerts (Phase 6).
+    const alerts: Alert[] = [];
+    const costLast5m = Number(costRow.rows[0].last_5m);
+    if (costLast5m > this.thresholds.costLast5mMicroUsd) {
+      alerts.push({
+        severity: 'warn',
+        code: 'high_cost_rate',
+        message: `Cost in the last 5 minutes (${costLast5m} µUSD) exceeds the ${this.thresholds.costLast5mMicroUsd} µUSD threshold.`,
+        value: costLast5m,
+        threshold: this.thresholds.costLast5mMicroUsd,
+      });
+    }
+    if (grossMarginPct !== null && grossMarginPct < this.thresholds.marginPct) {
+      alerts.push({
+        severity: 'warn',
+        code: 'low_margin',
+        message: `Gross margin (${grossMarginPct.toFixed(1)}%) is below the ${this.thresholds.marginPct}% threshold.`,
+        value: grossMarginPct,
+        threshold: this.thresholds.marginPct,
+      });
+    }
+    if (active > this.thresholds.activeSessions) {
+      alerts.push({
+        severity: 'warn',
+        code: 'high_load',
+        message: `Active sessions (${active}) exceed the ${this.thresholds.activeSessions} threshold.`,
+        value: active,
+        threshold: this.thresholds.activeSessions,
+      });
+    }
+    for (const h of providerHealth) {
+      if (h.status === 'unhealthy') {
+        alerts.push({
+          severity: 'critical',
+          code: 'provider_unhealthy',
+          message: `Provider "${h.name}" (${h.type}) is unhealthy${h.detail ? `: ${h.detail}` : '.'}`,
+          value: 1,
+          threshold: 0,
+        });
+      }
+    }
+
     return {
       generated_at: new Date().toISOString(),
       sessions: { active, total, by_status, by_product_type },
@@ -176,6 +311,9 @@ export class ControlRoomService {
       providers,
       provider_usage,
       provider_health: providerHealth,
+      routing: { total: routingTotal, by_provider: routingByProvider, by_resource_type: routingByResource },
+      series,
+      alerts,
     };
   }
 

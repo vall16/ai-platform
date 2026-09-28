@@ -114,8 +114,15 @@ func (e *Engine) Release(providerID string) {
 
 // Route evaluates all providers of the given type and returns the best
 // available candidate, failing over to the next-best when the top one is
-// unhealthy, circuit-open or over quota.
+// unhealthy, circuit-open or over quota. It applies no plan policy.
 func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) (*Result, error) {
+	return e.RouteWithPolicy(ctx, resourceType, Policy{})
+}
+
+// RouteWithPolicy is Route with a plan policy applied: providers whose
+// per-unit cost exceeds policy.MaxCostPerUnitMicroUsd, or that are not in
+// policy.AllowedProviderIDs, are marked ineligible before scoring.
+func (e *Engine) RouteWithPolicy(ctx context.Context, resourceType provider.ProviderType, policy Policy) (*Result, error) {
 	candidates := e.registry.ByType(resourceType)
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no providers registered for type %s", resourceType)
@@ -140,6 +147,23 @@ func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) 
 		if err != nil || health.Status == "unhealthy" {
 			c.Eligible = false
 			c.SkipReason = "unhealthy"
+			evals = append(evals, eval{provider: p, cand: c})
+			continue
+		}
+
+		// Plan policy gates (cost cap + provider allow-list).
+		if policy.MaxCostPerUnitMicroUsd > 0 {
+			cost, _ := p.CostPerUnit("default")
+			if cost > policy.MaxCostPerUnitMicroUsd {
+				c.Eligible = false
+				c.SkipReason = "over_cost_cap"
+				evals = append(evals, eval{provider: p, cand: c})
+				continue
+			}
+		}
+		if len(policy.AllowedProviderIDs) > 0 && !contains(policy.AllowedProviderIDs, p.ID()) {
+			c.Eligible = false
+			c.SkipReason = "plan_not_allowed"
 			evals = append(evals, eval{provider: p, cand: c})
 			continue
 		}
@@ -262,6 +286,60 @@ func (e *Engine) Route(ctx context.Context, resourceType provider.ProviderType) 
 		Failover:           failover,
 		Mode:               mode,
 		DegradationLevel:   degradationLevel,
+	}, nil
+}
+
+// EstimatedSessionCost is a pre-flight estimate of what a session of the given
+// resource type would cost under a plan policy, before any routing decision.
+type EstimatedSessionCost struct {
+	ResourceType         provider.ProviderType `json:"resource_type"`
+	ProviderID           string                `json:"provider_id"`
+	CostPerUnitMicroUsd  int64                 `json:"cost_per_unit_micro_usd"`
+	ExpectedUnits        int                   `json:"expected_units"`
+	EstimatedTotalMicroUsd int64               `json:"estimated_total_micro_usd"`
+}
+
+// EstimateSessionCost returns the cheapest eligible provider for the given
+// resource type under the policy, and the estimated total cost for
+// expectedUnits units. It applies the same plan policy gates as routing (cost
+// cap + allow-list) but does not consult health, circuit breakers or quota —
+// it is a pricing estimate, not a live routing decision.
+func (e *Engine) EstimateSessionCost(resourceType provider.ProviderType, expectedUnits int, policy Policy) (*EstimatedSessionCost, error) {
+	candidates := e.registry.ByType(resourceType)
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no providers registered for type %s", resourceType)
+	}
+
+	var bestID string
+	var bestCost int64
+	found := false
+	for _, p := range candidates {
+		if policy.MaxCostPerUnitMicroUsd > 0 {
+			cost, _ := p.CostPerUnit("default")
+			if cost > policy.MaxCostPerUnitMicroUsd {
+				continue
+			}
+		}
+		if len(policy.AllowedProviderIDs) > 0 && !contains(policy.AllowedProviderIDs, p.ID()) {
+			continue
+		}
+		cost, _ := p.CostPerUnit("default")
+		if !found || cost < bestCost {
+			bestID = p.ID()
+			bestCost = cost
+			found = true
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("no eligible provider for type %s under policy", resourceType)
+	}
+
+	return &EstimatedSessionCost{
+		ResourceType:         resourceType,
+		ProviderID:           bestID,
+		CostPerUnitMicroUsd:  bestCost,
+		ExpectedUnits:        expectedUnits,
+		EstimatedTotalMicroUsd: bestCost * int64(expectedUnits),
 	}, nil
 }
 

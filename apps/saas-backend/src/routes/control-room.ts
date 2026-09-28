@@ -65,13 +65,21 @@ const CONTROL_ROOM_HTML = `<!doctype html>
   .pill.unhealthy { color:var(--bad); border-color:var(--bad); }
   .empty { color:var(--muted); font-size:13px; }
   .note { color:var(--warn); font-size:12px; }
+  .alert { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; font-size:13px; }
+  .alert .tag { flex:0 0 auto; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; }
+  .alert.warn { border-color:var(--warn); }
+  .alert.warn .tag { color:var(--warn); border:1px solid var(--warn); }
+  .alert.critical { border-color:var(--bad); }
+  .alert.critical .tag { color:var(--bad); border:1px solid var(--bad); }
+  .alert.info { border-color:var(--accent); }
+  .alert.info .tag { color:var(--accent); border:1px solid var(--accent); }
   .foot { color:var(--muted); font-size:11px; text-align:center; padding:16px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Control Room</h1>
-  <span class="sub">v0 · piattaforma</span>
+  <span class="sub">v1 · piattaforma</span>
   <div class="keybox">
     <input id="key" type="password" placeholder="API key (sk_live_...)" autocomplete="off" />
     <button id="connect">Connetti</button>
@@ -86,6 +94,11 @@ const CONTROL_ROOM_HTML = `<!doctype html>
     <div class="card"><div class="label">Cost totale</div><div class="value" id="c-costtotal">–</div><div class="hint">usage ledger</div></div>
     <div class="card"><div class="label">Margin</div><div class="value" id="c-margin">–</div><div class="hint" id="c-margin-hint"></div></div>
   </div>
+
+  <section>
+    <h2>Alert</h2>
+    <div id="alerts" class="empty">nessun alert</div>
+  </section>
 
   <section>
     <h2>Sessioni</h2>
@@ -110,6 +123,16 @@ const CONTROL_ROOM_HTML = `<!doctype html>
   <section>
     <h2>Provider — catalogo registrato</h2>
     <div id="providers" class="empty">n/d</div>
+  </section>
+
+  <section>
+    <h2>Routing — distribuzione decisioni</h2>
+    <div id="routing" class="empty">n/d</div>
+  </section>
+
+  <section>
+    <h2>Costo / Ricavi — ultime 24h (per ora)</h2>
+    <div id="series" class="empty">n/d</div>
   </section>
 </main>
 <div class="foot" id="foot">Control Room v0 · auto-refresh 10s</div>
@@ -173,7 +196,27 @@ function render(o) {
   const provRows = o.providers.map((p) => ['<span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span> ' + esc(p.name) + ' <span style="color:var(--muted)">(' + esc(p.type) + ')</span>', '']);
   $('providers').innerHTML = o.providers.length ? table(['provider', ''], provRows) : '<div class="empty">nessun provider registrato (i mock usano id stringa in usage_ledger)</div>';
 
-  $('foot').textContent = 'Control Room v0 · aggiornato ' + new Date(o.generated_at).toLocaleTimeString('it-IT') + ' · auto-refresh 10s';
+  // Alerts (Phase 6).
+  if (!o.alerts || !o.alerts.length) {
+    $('alerts').innerHTML = '<div class="empty">nessun alert — tutte le soglie rispettate</div>';
+  } else {
+    $('alerts').innerHTML = o.alerts.map((al) =>
+      '<div class="alert ' + esc(al.severity) + '"><span class="tag">' + esc(al.severity) + '</span><div>' + esc(al.message) + '</div></div>'
+    ).join('');
+  }
+
+  // Routing distribution (Phase 6).
+  const routeProvRows = Object.entries(o.routing.by_provider).map(([k, v]) => [esc(k), v]);
+  const routeResRows = Object.entries(o.routing.by_resource_type).map(([k, v]) => [esc(k), v]);
+  $('routing').innerHTML =
+    '<div style="margin-bottom:10px;color:var(--muted);font-size:12px">per provider (' + o.routing.total + ' decisioni)</div>' + table(['provider', 'n'], routeProvRows) +
+    '<div style="margin:14px 0 10px;color:var(--muted);font-size:12px">per risorsa</div>' + table(['risorsa', 'n'], routeResRows);
+
+  // Hourly cost/revenue/margin series (Phase 6).
+  const seriesRows = o.series.map((s) => [esc(s.hour), usd(s.cost_micro_usd), usd(s.revenue_micro_usd), usd(s.margin_micro_usd)]);
+  $('series').innerHTML = table(['ora', 'costo', 'ricavi', 'margine'], seriesRows);
+
+  $('foot').textContent = 'Control Room v1 · aggiornato ' + new Date(o.generated_at).toLocaleTimeString('it-IT') + ' · auto-refresh 10s';
 }
 
 async function load() {

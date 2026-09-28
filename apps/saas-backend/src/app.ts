@@ -20,9 +20,13 @@ import { registerTenantRoutes } from './routes/tenants.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerControlRoomRoutes } from './routes/control-room.js';
+import { registerMerchantRoutes } from './routes/merchant.js';
+import { registerPricingRoutes } from './routes/pricing.js';
 import { registerGdprRoutes } from './routes/gdpr.js';
 import { GdprService } from './services/gdpr.js';
 import { ControlRoomService, type HealthProvider } from './services/control-room.js';
+import { MerchantAnalyticsService } from './services/merchant-analytics.js';
+import { PricingService } from './services/pricing.js';
 import type { Provider } from '@ai-platform/contracts';
 import { Metrics } from './metrics.js';
 
@@ -102,6 +106,8 @@ export async function buildApp(
   const billingService = new BillingService(pool, config.stripeSecretKey);
   const quotaService = new QuotaService(pool, config.quotaFixedCostMicroUsd);
   const gdprService = new GdprService(pool);
+  const merchantAnalyticsService = new MerchantAnalyticsService(pool);
+  const pricingService = new PricingService(pool);
 
   // Agent (chatbot) wiring — mock-first providers, real cost ledger.
   const agentDeps = createAgentDependencies(pool);
@@ -139,6 +145,8 @@ export async function buildApp(
   registerSessionRoutes(app, sessionService, agentService, audioStore, authGuard, quotaService);
   registerBillingRoutes(app, billingService, authGuard, quotaService);
   registerControlRoomRoutes(app, controlRoomService, authGuard);
+  registerMerchantRoutes(app, merchantAnalyticsService, authGuard);
+  registerPricingRoutes(app, pricingService, authGuard);
   registerGdprRoutes(app, gdprService, authGuard, config);
 
   const ctx: AppContext = {

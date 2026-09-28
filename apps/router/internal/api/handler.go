@@ -18,6 +18,7 @@ type Server struct {
 	engine   *scoring.Engine
 	registry *provider.Registry
 	log      *obs.Logger
+	policies *scoring.PlanPolicies
 
 	metrics            *metrics.Registry
 	routeRequests      *metrics.Counter
@@ -42,9 +43,14 @@ func NewServer(engine *scoring.Engine, registry *provider.Registry, log *obs.Log
 	}
 }
 
+// SetPlanPolicies installs the plan->policy resolver used to constrain routing
+// by the request's plan. When unset, routing is plan-agnostic (zero policy).
+func (s *Server) SetPlanPolicies(p *scoring.PlanPolicies) { s.policies = p }
+
 // Routes registers the API endpoints on the given mux.
 func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/route", s.handleRoute)
+	mux.HandleFunc("GET /api/v1/estimate", s.handleEstimate)
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/providers", s.handleProviders)
 	mux.HandleFunc("POST /api/v1/providers/{id}/outcome", s.handleOutcome)
@@ -58,6 +64,7 @@ type RouteRequest struct {
 	SessionID    string `json:"session_id,omitempty"`
 	RequestID    string `json:"request_id"`
 	ResourceType string `json:"resource_type"` // "avatar", "llm", "stt", etc.
+	Plan         string `json:"plan,omitempty"`  // subscription plan; constrains routing
 }
 
 // RouteResponse is the response for POST /api/v1/route.
@@ -95,9 +102,10 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info("route", "tenant_id", req.TenantID, "request_id", req.RequestID, "resource_type", req.ResourceType)
+	log.Info("route", "tenant_id", req.TenantID, "request_id", req.RequestID, "resource_type", req.ResourceType, "plan", req.Plan)
 
-	result, err := s.engine.Route(r.Context(), provider.ProviderType(req.ResourceType))
+	policy := s.policies.For(req.Plan)
+	result, err := s.engine.RouteWithPolicy(r.Context(), provider.ProviderType(req.ResourceType), policy)
 	if err != nil {
 		log.Error("route failed", "err", err.Error(), "resource_type", req.ResourceType)
 		s.recordRoute(req.ResourceType, http.StatusServiceUnavailable, start)
@@ -119,6 +127,35 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		TraceID:            tc.TraceID,
 		DecidedAt:          time.Now().UTC(),
 	})
+}
+
+// handleEstimate answers GET /api/v1/estimate?resource_type=&units=&plan= with
+// a pre-flight cost estimate for a session of the given resource type under
+// the plan's policy. It does not reserve capacity or make a live routing call.
+func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
+	tc := trace.FromHeaders(r.Header.Get)
+	setTraceHeaders(w, tc)
+
+	q := r.URL.Query()
+	resourceType := q.Get("resource_type")
+	if resourceType == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "resource_type is required"})
+		return
+	}
+	units, err := strconv.Atoi(q.Get("units"))
+	if err != nil || units <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "units must be a positive integer"})
+		return
+	}
+	plan := q.Get("plan")
+
+	policy := s.policies.For(plan)
+	est, err := s.engine.EstimateSessionCost(provider.ProviderType(resourceType), units, policy)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, est)
 }
 
 // recordRoute records a route decision in the metrics registry: a request

@@ -88,6 +88,13 @@ func main() {
 
 	// Build HTTP server.
 	server := api.NewServer(engine, registry, logger)
+	// Plan-based routing policies: cheaper plans are capped to lower-cost
+	// providers; higher plans (and unknown plans) route unconstrained.
+	server.SetPlanPolicies(scoring.NewPlanPolicies(map[string]scoring.Policy{
+		"starter":    {MaxCostPerUnitMicroUsd: 50_000},
+		"pro":        {},
+		"enterprise": {},
+	}, scoring.Policy{}))
 	mux := http.NewServeMux()
 	server.Routes(mux)
 
