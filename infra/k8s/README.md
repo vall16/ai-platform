@@ -14,6 +14,7 @@ Manifest per deployare la piattaforma su un cluster Kubernetes.
 | `50-backend.yaml` | Deployment + Service | SaaS backend (2 repliche), initContainer in attesa delle migrazioni |
 | `60-router.yaml` | Deployment + Service | router Go stateless (2 repliche) |
 | `70-ingress.yaml` | Ingress | **opzionale**, richiede un Ingress controller |
+| `monitoring/` | Helm + ServiceMonitor + Grafana | **opzionale**, stack Prometheus/Grafana (vedi `monitoring/README.md`) |
 
 ## 1. Build e push delle immagini
 
@@ -83,6 +84,22 @@ curl -s localhost:3000/api/v1/health
 kubectl -n ai-platform port-forward svc/router 8080:8080
 curl -s localhost:8080/api/v1/health
 ```
+
+## 5. Monitoring (opzionale)
+
+Stack Prometheus + ServiceMonitor + Grafana in [`monitoring/`](monitoring/README.md).
+Richiede `helm`. In sintesi:
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+  -n ai-platform --create-namespace \
+  -f infra/k8s/monitoring/kube-prometheus-stack.values.yaml
+kubectl apply -f infra/k8s/monitoring/80-servicemonitors.yaml
+kubectl apply -f infra/k8s/monitoring/90-grafana-dashboard.yaml
+```
+
+Dettaglio, verifica e accesso a Grafana in `monitoring/README.md`.
 
 ## Note
 

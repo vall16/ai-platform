@@ -86,8 +86,13 @@ class Histogram extends Metric {
       entry = { labels, counts: new Array(this.buckets.length).fill(0), sum: 0, total: 0 };
       this.entries.set(key, entry);
     }
+    // Increment only the first bucket the value falls into; render() applies
+    // the cumulative sum, so incrementing every matching bucket would double-count.
     for (let i = 0; i < this.buckets.length; i++) {
-      if (value <= this.buckets[i]) entry.counts[i]++;
+      if (value <= this.buckets[i]) {
+        entry.counts[i]++;
+        break;
+      }
     }
     entry.sum += value;
     entry.total++;

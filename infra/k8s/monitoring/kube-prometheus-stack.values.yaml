@@ -1,0 +1,80 @@
+# Values for the kube-prometheus-stack Helm chart.
+#
+# Installs the Prometheus Operator + Prometheus + Grafana + Alertmanager into
+# the ai-platform namespace. The ServiceMonitors in 80-servicemonitors.yaml are
+# picked up automatically, and the Grafana dashboard in 90-grafana-dashboard.yaml
+# is loaded by the Grafana dashboard sidecar (label grafana_dashboard="1").
+#
+# See README.md for the full install procedure.
+
+# Install the whole stack into the same namespace as the application.
+namespace: ai-platform
+
+# --- Prometheus -------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 10Gi
+    # Watch ServiceMonitors in every namespace (our app lives in ai-platform).
+    serviceMonitorNamespaceSelector: {}
+    podMonitorNamespaceSelector: {}
+    # When no explicit selector is set, watch ALL ServiceMonitors (not just the
+    # ones created by this chart), so our 80-servicemonitors.yaml are scraped.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+
+# --- Grafana ----------------------------------------------------------------
+grafana:
+  enabled: true
+  adminUser: admin
+  # adminPassword is intentionally NOT set: the chart generates a random one
+  # and stores it in a Secret. Retrieve it (see README) instead of hardcoding.
+  service:
+    type: ClusterIP
+  sidecar:
+    # Auto-create the Prometheus datasource from the in-cluster Prometheus.
+    datasources:
+      enabled: true
+      searchNamespace: ALL
+    # Auto-load dashboards from ConfigMaps labelled grafana_dashboard="1".
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+      labelValue: "1"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  # Optional: expose Grafana through the cluster ingress.
+  # ingress:
+  #   enabled: true
+  #   ingressClassName: nginx
+  #   hosts:
+  #     - host: grafana.ai-platform.local
+  #       paths:
+  #         - path: /
+  #           pathType: Prefix
+
+# --- Alertmanager (minimal; no routing configured yet) ----------------------
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+# --- Node + object metrics (useful context for the app dashboards) ----------
+nodeExporter:
+  enabled: true
+kubeStateMetrics:
+  enabled: true

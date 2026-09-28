@@ -1,0 +1,42 @@
+# ServiceMonitors tell the Prometheus Operator which services to scrape.
+# They require the monitoring.coreos.com CRDs, which kube-prometheus-stack
+# installs. Apply AFTER the Helm release is up.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  namespaceSelector:
+    matchNames:
+      - ai-platform
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: router
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: router
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: router
+  namespaceSelector:
+    matchNames:
+      - ai-platform
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

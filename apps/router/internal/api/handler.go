@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/ai-platform/router/internal/metrics"
 	"github.com/ai-platform/router/internal/obs"
 	"github.com/ai-platform/router/internal/provider"
 	"github.com/ai-platform/router/internal/scoring"
@@ -16,6 +18,11 @@ type Server struct {
 	engine   *scoring.Engine
 	registry *provider.Registry
 	log      *obs.Logger
+
+	metrics            *metrics.Registry
+	routeRequests      *metrics.Counter
+	routeDuration      *metrics.Histogram
+	providerOutcomes   *metrics.Counter
 }
 
 // NewServer creates an API server with the given engine, registry and logger.
@@ -23,7 +30,16 @@ func NewServer(engine *scoring.Engine, registry *provider.Registry, log *obs.Log
 	if log == nil {
 		log = obs.New(discardWriter{}, "router")
 	}
-	return &Server{engine: engine, registry: registry, log: log}
+	m := metrics.New()
+	return &Server{
+		engine:   engine,
+		registry: registry,
+		log:      log,
+		metrics:  m,
+		routeRequests:    m.Counter("router_route_requests_total", "Total route decisions made"),
+		routeDuration:    m.Histogram("router_route_duration_seconds", "Route decision duration in seconds", []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1}),
+		providerOutcomes: m.Counter("router_provider_outcomes_total", "Total provider call outcomes recorded"),
+	}
 }
 
 // Routes registers the API endpoints on the given mux.
@@ -33,6 +49,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/providers", s.handleProviders)
 	mux.HandleFunc("POST /api/v1/providers/{id}/outcome", s.handleOutcome)
 	mux.HandleFunc("POST /api/v1/providers/{id}/release", s.handleRelease)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
 }
 
 // RouteRequest is the body for POST /api/v1/route.
@@ -61,15 +78,19 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 	log := s.log.WithTrace(tc.TraceID)
 	setTraceHeaders(w, tc)
 
+	start := time.Now()
+
 	var req RouteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Warn("route: invalid body", "err", err.Error())
+		s.recordRoute("", http.StatusBadRequest, start)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
 	if req.TenantID == "" || req.RequestID == "" || req.ResourceType == "" {
 		log.Warn("route: missing fields", "tenant_id", req.TenantID, "request_id", req.RequestID, "resource_type", req.ResourceType)
+		s.recordRoute(req.ResourceType, http.StatusBadRequest, start)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tenant_id, request_id, resource_type are required"})
 		return
 	}
@@ -79,11 +100,13 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 	result, err := s.engine.Route(r.Context(), provider.ProviderType(req.ResourceType))
 	if err != nil {
 		log.Error("route failed", "err", err.Error(), "resource_type", req.ResourceType)
+		s.recordRoute(req.ResourceType, http.StatusServiceUnavailable, start)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return
 	}
 
 	log.Info("routed", "provider", result.SelectedProviderID, "score", result.Score, "failover", result.Failover, "reason", result.Reason)
+	s.recordRoute(req.ResourceType, http.StatusOK, start)
 
 	writeJSON(w, http.StatusOK, RouteResponse{
 		SelectedProviderID: result.SelectedProviderID,
@@ -96,6 +119,13 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		TraceID:            tc.TraceID,
 		DecidedAt:          time.Now().UTC(),
 	})
+}
+
+// recordRoute records a route decision in the metrics registry: a request
+// counter (by resource type and HTTP status) and a duration histogram.
+func (s *Server) recordRoute(resourceType string, status int, start time.Time) {
+	s.routeRequests.Inc(metrics.Labels{"resource_type": resourceType, "status": strconv.Itoa(status)})
+	s.routeDuration.Observe(metrics.Labels{"resource_type": resourceType}, time.Since(start).Seconds())
 }
 
 // OutcomeRequest is the body for POST /api/v1/providers/{id}/outcome.
@@ -123,6 +153,11 @@ func (s *Server) handleOutcome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.engine.RecordOutcome(id, req.Success)
+	success := "false"
+	if req.Success {
+		success = "true"
+	}
+	s.providerOutcomes.Inc(metrics.Labels{"provider": id, "success": success})
 	log.Info("outcome", "provider", id, "success", req.Success)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "recorded", "provider_id": id})
 }
@@ -146,6 +181,14 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleMetrics renders the registry in Prometheus text exposition format.
+// No auth, matching the backend's /metrics endpoint.
+func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(s.metrics.Render()))
 }
 
 func (s *Server) handleProviders(w http.ResponseWriter, _ *http.Request) {
