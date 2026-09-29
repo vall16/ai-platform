@@ -24,4 +24,4 @@ Il vantaggio competitivo non è il widget, è il motore dietro:
 
 ## Stato
 
-**Phase 0 — Fondamenta.** Vedi roadmap per scope, fasi e criteri di completamento.
+**Phase 6 completata (2026-09-28).** Entrambi i prodotti (AI Persona + AI Salesperson) funzionano end-to-end; sistema di costi/ricavi completo, dashboards (merchant + Control Room v1), routing cost-aware per piano, GDPR, deploy Kubernetes e monitoring. Fornitori ancora simulati (mock), pronti per i servizi reali. Vedi roadmap per scope, fasi e criteri di completamento.
