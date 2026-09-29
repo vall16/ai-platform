@@ -17,12 +17,20 @@ import {
   MockContentToolProvider,
   MockCommerceToolProvider,
 } from '@ai-platform/mock-providers';
+import { QwenLLMProvider } from './qwen-llm.js';
 import { CommerceBridge, ShopifyAdapter, WooCommerceAdapter } from '@ai-platform/commerce-core';
 import { ContentBridge, WordPressContentToolProvider } from './wordpress-content.js';
 
 export function createAgentDependencies(pool: Pool): AgentDependencies {
+  const llmBaseUrl = process.env.LLM_BASE_URL ?? 'http://192.168.1.145:11434/v1';
+  const llmKey = process.env.LLM_API_KEY ?? 'not-needed';
+  const llmModel = process.env.LLM_MODEL ?? 'qwen3.8-27b';
   return {
-    llm: new MockLLMProvider(),
+    llm: new QwenLLMProvider({
+      apiKey: llmKey,
+      model: llmModel,
+      baseUrl: llmBaseUrl,
+    }),
     tts: new MockTTSProvider(),
     stt: new MockSTTProvider(),
     // Live WordPress content when a session carries a site_url, mock otherwise.
