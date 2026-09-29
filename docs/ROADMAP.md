@@ -1,6 +1,6 @@
 # Roadmap — AI Platform
 
-> Stato: **Phase 6 completata (2026-09-28)** — Dashboards + cost-aware routing: merchant dashboard (analytics per tenant), Control Room v1 (routing chart, cost/margin time series, alerting), routing cost-aware per piano + `EstimatedSessionCost` + historical pricing · Aggiornato: 2026-09-28
+> Stato: **Phase 6 completata (2026-09-28)** — Dashboards + cost-aware routing: merchant dashboard (analytics per tenant), Control Room v1 (routing chart, cost/margin time series, alerting), routing cost-aware per piano + `EstimatedSessionCost` + historical pricing · Prossima: **Phase 7** (routing avanzato: shadow/benchmarking, anomaly detection, what-if, region routing) · Aggiornato: 2026-09-29
 > Documento vivo: aggiornare a fine fase.
 
 ## 1. Visione e principi invariabili
@@ -134,7 +134,18 @@
 - [x] **Historical pricing** — `PricingService` (saas-backend): `effectiveCost(provider, resource, at)` risolve il rate in vigore a un istante dalla tabella `pricing` (`effective_from <= at AND (effective_to IS NULL OR effective_to > at)`), `history` restituisce la timeline completa; route `GET /api/v1/pricing/effective` (404 se nessun rate in vigore) e `GET /api/v1/pricing/history` (authGuard). Test 138 (8 check).
 
 **Acceptance:** test 135 (merchant dashboard) + 136 (Control Room v1) + 137 (cost-aware routing, Go) + 138 (historical pricing) verdi. ✅ (2026-09-28)
-**Out of scope:** app embed Shopify, OAuth server-side, shadow routing / benchmarking / what-if (restano da Phase 3), region routing / data residency.
+**Out of scope:** app embed Shopify, OAuth server-side, shadow routing / benchmarking / what-if (spostati in **Phase 7**), region routing / data residency (spostata in **Phase 7**).
+
+### Phase 7 — Routing avanzato: osservabilità, sicurezza e multi-regione (da fare)
+**Obiettivo:** chiudere i "da fare" rimasti dalla Phase 3 — routing osservato e simulato, protezione da anomalie/abuso, e routing multi-regione con data residency.
+
+- [ ] **Shadow routing + provider benchmarking** (job automatico) — instradare una quota di traffico in "ombra" verso provider alternativi senza impattare l'utente, confrontando qualità/latenza/costo per alimentare lo scoring.
+- [ ] **Cost/usage anomaly detection + abuse/fraud protection** — rilevare picchi anomali di costo/uso per tenant e bloccare/mitigare l'abuso (soglie, rate limit, allarmi).
+- [ ] **What-if simulation (routing simulation)** — simulare l'impatto di cambi di policy/prezzi/provider sul costo e sul margine prima di applicarli.
+- [ ] **Region routing (EU/US/Asia) + data residency** — instradare per regione e garantire la residenza dei dati (GDPR) per area geografica.
+
+**Acceptance:** test di acceptance per ogni item (shadow routing, anomaly detection, what-if, region routing) verdi.
+**Out of scope:** avatar (de-scoped, opzionale), passaggio ai fornitori reali (live), OAuth server-side, app embed Shopify.
 
 ## 3. Workstream (paralleli)
 
@@ -176,4 +187,5 @@
 - **Stack:** TypeScript/Node (SaaS + business logic), Go (router), Postgres, Redis, WebSocket/WebRTC, S3, queue, Docker, OTel/Prometheus/Grafana/Loki.
 - **Package manager:** npm (workspaces) — pnpm non installato in ambiente.
 - **Go:** Go 1.27.1 installato in `C:\Users\crist\go-sdk` (bin nel PATH utente). Il router compila (`go build`), passa `go vet` e risponde end-to-end (`/api/v1/health`, `/api/v1/providers`, `/api/v1/route`) con mock provider. Build: `go build -o router.exe ./cmd/router` da `apps/router`.
+- **Deployment:** guida completa in [DEPLOYMENT.md](DEPLOYMENT.md) (Kubernetes, migrazioni, monitoring).
 - **Nomi/identificatori** in inglese; documentazione in italiano.
