@@ -23,6 +23,7 @@ import { registerControlRoomRoutes } from './routes/control-room.js';
 import { registerMerchantRoutes } from './routes/merchant.js';
 import { registerPricingRoutes } from './routes/pricing.js';
 import { registerGdprRoutes } from './routes/gdpr.js';
+import { registerDemoChatRoute } from './routes/demo-chat.js';
 import { GdprService } from './services/gdpr.js';
 import { ControlRoomService, type HealthProvider } from './services/control-room.js';
 import { MerchantAnalyticsService } from './services/merchant-analytics.js';
@@ -148,6 +149,7 @@ export async function buildApp(
   registerMerchantRoutes(app, merchantAnalyticsService, authGuard);
   registerPricingRoutes(app, pricingService, authGuard);
   registerGdprRoutes(app, gdprService, authGuard, config);
+  registerDemoChatRoute(app);
 
   const ctx: AppContext = {
     close: async () => {

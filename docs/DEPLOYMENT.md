@@ -33,14 +33,14 @@ Solo i data store in Docker; il codice gira in locale.
 docker compose -f infra/docker-compose/docker-compose.yml up -d
 
 # 2) Backend (porta 3000)
-DATABASE_URL=postgres://postgres:sa@localhost:5432/ai_platform \
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai_platform \
   npm run dev -w @ai-platform/saas-backend
 
 # 3) Router (porta 8080) — in un altro terminale
 cd apps/router && go run ./cmd/router
 ```
 
-Credenziali locali: `postgres / sa / ai_platform` (coerenti con `docs/DATABASE.md`).
+Credenziali locali: `postgres / postgres / ai_platform` (coerenti con `docs/DATABASE.md`).
 Le migrazioni si applicano con il runner di `@ai-platform/db` (vedi §2, passo c).
 
 Verifica rapida:
