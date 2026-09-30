@@ -137,25 +137,37 @@ export class QwenLLMProvider implements LLMProvider {
   }
 
   async getHealth(_ctx: ProviderContext): Promise<HealthStatus> {
+    const start = Date.now();
     try {
-      const start = Date.now();
       const res = await fetch(`${this.baseUrl}/models`, {
         headers: { Authorization: `Bearer ${this.apiKey}` },
       });
-      const latency = Date.now() - start;
+      const latencyMs = Date.now() - start;
       return {
         status: res.ok ? 'healthy' : 'degraded',
-        latency_ms: latency,
-        checked_at: new Date().toISOString(),
+        latencyMs,
+        checkedAt: new Date().toISOString(),
         detail: res.ok ? undefined : `HTTP ${res.status}`,
       };
     } catch (e) {
-      return { status: 'unhealthy', latency_ms: 0, checked_at: new Date().toISOString(), detail: String(e) };
+      return {
+        status: 'unhealthy',
+        latencyMs: Date.now() - start,
+        checkedAt: new Date().toISOString(),
+        detail: e instanceof Error ? e.message : String(e),
+      };
     }
   }
 
   async getCapabilities(): Promise<Capabilities> {
-    return { streaming: true, functionCalling: true, maxContextTokens: 131072 };
+    return {
+      streaming: true,
+      languages: ['en', 'it', 'es', 'fr', 'de', 'ja', 'ko', 'zh'],
+      maxConcurrentSessions: 500,
+      features: {
+        'function-calling': true,
+      },
+    };
   }
 
   async shutdown() {

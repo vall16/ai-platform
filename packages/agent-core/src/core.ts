@@ -136,6 +136,17 @@ export class AgentCore {
       }
     }
 
+    // The model can keep requesting tools for the whole budget (e.g. it keeps
+    // re-searching a catalog that has no match). The last response is then a
+    // tool call with no user-facing text, so ask once more with the tools
+    // removed — that forces a final answer instead of an empty bubble.
+    if (response?.toolCalls?.length) {
+      const final = await this.deps.llm.complete(ctx, { messages });
+      llmCost += final.cost.costMicroUsd;
+      llmCalls++;
+      response = final.data;
+    }
+
     const reply = response?.content ?? '';
 
     // Persist the exchange to in-session memory.
